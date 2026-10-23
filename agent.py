@@ -49,27 +49,50 @@ def fetch_ai_news():
 
 # 3. Le Cerveau : Appel à Gemini
 def call_gemini(prompt):
-    models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
-    last_err = ""
-    for model in models:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
+    # Découverte automatique des modèles disponibles pour cette clé
+    list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
+    try:
+        list_res = requests.get(list_url, timeout=20)
+        print(f"Status vérification des modèles : {list_res.status_code}")
+        if list_res.status_code == 200:
+            data = list_res.json()
+            available = [
+                m["name"] for m in data.get("models", [])
+                if "generateContent" in m.get("supportedGenerationMethods", [])
+            ]
+            print(f"Modèles compatibles trouvés ({len(available)}) : {available[:5]}")
+            if available:
+                # On teste les modèles trouvés
+                for model_full in available:
+                    model_id = model_full.replace("models/", "")
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={GEMINI_API_KEY}"
+                    headers = {"Content-Type": "application/json"}
+                    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+                    r = requests.post(url, headers=headers, json=payload, timeout=30)
+                    if r.status_code == 200:
+                        return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+                    else:
+                        print(f"Modèle {model_id} a échoué ({r.status_code})")
+        else:
+            print(f"Erreur lors de la liste des modèles : {list_res.text}")
+    except Exception as e:
+        print(f"Exception lors de la liste des modèles : {e}")
+
+    # Essai de secours avec l'API v1 standard
+    for model in ["gemini-1.5-flash", "gemini-pro"]:
+        url = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent?key={GEMINI_API_KEY}"
         headers = {"Content-Type": "application/json"}
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}]
-        }
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
-            if response.status_code == 200:
-                data = response.json()
-                return data["candidates"][0]["content"]["parts"][0]["text"]
+            r = requests.post(url, headers=headers, json=payload, timeout=30)
+            if r.status_code == 200:
+                return r.json()["candidates"][0]["content"]["parts"][0]["text"]
             else:
-                last_err = response.text
-                print(f"Modèle {model} indisponible ({response.status_code}), essai du suivant...")
+                print(f"v1 {model} status {r.status_code}: {r.text}")
         except Exception as e:
-            last_err = str(e)
-            print(f"Erreur sur {model}: {e}")
-            
-    raise Exception(f"Impossible de contacter Gemini : {last_err}")
+            print(f"v1 {model} erreur: {e}")
+
+    raise Exception("Impossible de générer le post : vérifie la clé GEMINI_API_KEY dans GitHub Secrets.")
 
 def generate_post(articles):
     articles_text = "\n".join([f"- {a['title']} (Lien: {a['link']})" for a in articles])
