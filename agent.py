@@ -1,7 +1,7 @@
 import os
 import sys
 import json
-import urllib.parse
+import time
 import requests
 import feedparser
 from google import genai
@@ -10,9 +10,10 @@ from google import genai
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 FB_PAGE_ID = os.environ.get("FB_PAGE_ID")
 FB_PAGE_ACCESS_TOKEN = os.environ.get("FB_PAGE_ACCESS_TOKEN")
+HF_TOKEN = os.environ.get("HF_TOKEN")
 
 if not all([GEMINI_API_KEY, FB_PAGE_ID, FB_PAGE_ACCESS_TOKEN]):
-    print("❌ Erreur : Une ou plusieurs clés secrètes sont manquantes dans GitHub Secrets.")
+    print("❌ Erreur : Des clés secrètes essentielles sont manquantes.")
     sys.exit(1)
 
 HISTORY_FILE = "history.txt"
@@ -87,13 +88,15 @@ TÂCHE :
 - Pourquoi c'est important ou ce que ça change pour l'avenir.
 - Une question ouverte à la fin pour inciter les gens à commenter.
 - 4 ou 5 hashtags pertinents (ex: #IntelligenceArtificielle #IA #TechNews #Innovation).
-3. Donne un prompt visuel en anglais pour une photographie moderne et ultra réaliste du sujet (pas de visages déformés, pas de texte dans l'image, style magazine Forbes / Wired tech).
+3. Donne un prompt visuel en anglais pour une image époustouflante et photoréaliste :
+- Style : Photographie technologique moderne de très haute qualité (style magazine Wired / Bloomberg).
+- Pas de visages déformés, pas de texte écrit dans l'image.
 
 FORMAT DE RÉPONSE OBLIGATOIRE (en JSON strict) :
 {{
   "selected_link": "lien de l'article choisi parmi la liste",
   "post_text": "le texte complet du post Facebook avec émojis et hashtags",
-  "image_prompt": "description visuelle en anglais, clean tech photography, photorealistic, 8k resolution"
+  "image_prompt": "description visuelle détaillée en anglais, hyperrealistic, award winning photography, 8k resolution"
 }}
 Ne renvoie rien d'autre que ce JSON."""
 
@@ -101,57 +104,39 @@ Ne renvoie rien d'autre que ce JSON."""
     clean_json = raw_output.strip().replace("```json", "").replace("```", "").strip()
     return json.loads(clean_json)
 
-# 4. L'Artiste : Génération d'images haute qualité (Google Imagen 3 + FLUX)
-def download_image(prompt):
-    # Option 1 : Essai avec le modèle officiel Google Imagen 3
-    try:
-        from google.genai import types
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        for img_model in ["imagen-3.0-generate-002", "imagen-4.0-generate-001"]:
-            try:
-                print(f"🎨 Tentative avec le modèle Google officiel : {img_model}...")
-                res = client.models.generate_images(
-                    model=img_model,
-                    prompt=f"{prompt}, award winning photography, ultra-detailed, photorealistic, 4k",
-                    config=types.GenerateImagesConfig(
-                        number_of_images=1,
-                        output_mime_type="image/jpeg",
-                        aspect_ratio="1:1"
-                    )
-                )
-                if res.generated_images:
-                    print(f"✨ Victoire ! Image somptueuse générée par Google {img_model} !")
-                    return res.generated_images[0].image.image_bytes
-            except Exception as e:
-                print(f"Google {img_model} : {e}")
-    except Exception as e:
-        print(f"Erreur Imagen : {e}")
-
-    # Option 2 : Moteur FLUX Ultra-HD
-    import random
-    clean_prompt = prompt.replace("'", "").replace('"', '')
-    enhanced = f"{clean_prompt}, clean modern tech aesthetic, photorealistic, cinematic 8k, professional photography, studio lighting, hyper-detailed"
-    encoded = urllib.parse.quote(enhanced)
-    seed = random.randint(1000, 999999)
+# 4. L'Artiste : Génération d'images via Hugging Face (FLUX.1 officiel - 0 Filigrane, 0 Logo)
+def query_huggingface_model(model_id, prompt):
+    api_url = f"https://api-inference.huggingface.co/models/{model_id}"
+    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+    payload = {"inputs": prompt}
     
-    flux_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1080&height=1080&model=flux&nologo=true&enhance=true&seed={seed}"
-    print("🎨 Génération via le moteur FLUX Ultra-HD...")
-    try:
-        res = requests.get(flux_url, timeout=60)
-        if res.status_code == 200 and len(res.content) > 15000:
+    print(f"🎨 Génération de l'image officielle avec Hugging Face ({model_id})...")
+    for attempt in range(3):
+        res = requests.post(api_url, headers=headers, json=payload, timeout=60)
+        if res.status_code == 200 and len(res.content) > 10000:
+            print(f"✨ Image générée avec succès par {model_id} (Zéro logo, qualité pro) !")
             return res.content
-    except Exception as e:
-        print(f"FLUX indisponible : {e}")
+        elif res.status_code == 503:
+            print("⏳ Modèle en cours de chargement sur Hugging Face, attente 10s...")
+            time.sleep(10)
+        else:
+            print(f"Hugging Face {model_id} réponse : {res.status_code} - {res.text[:100]}")
+            break
+    return None
 
-    # Option 3 : Moteur Turbo
-    try:
-        fb_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1080&height=1080&model=turbo&nologo=true&seed={seed}"
-        res_fb = requests.get(fb_url, timeout=40)
-        if res_fb.status_code == 200:
-            return res_fb.content
-    except Exception as e:
-        print(f"Moteur Turbo indisponible : {e}")
+def download_image(prompt):
+    if HF_TOKEN:
+        # 1. Modèle FLUX.1 officiel de Black Forest Labs (Le sommet de la qualité)
+        img = query_huggingface_model("black-forest-labs/FLUX.1-schnell", prompt)
+        if img:
+            return img
+            
+        # 2. Modèle de secours Stable Diffusion XL de Stability AI
+        img = query_huggingface_model("stabilityai/stable-diffusion-xl-base-1.0", prompt)
+        if img:
+            return img
 
+    print("⚠️ Impossible d'obtenir l'image via Hugging Face.")
     return None
 
 # 5. Le Facteur : Publication sur Facebook
@@ -196,7 +181,7 @@ def publish_to_facebook(text, image_bytes):
     }
     res = requests.post(url, data=data, files=files, timeout=40)
     if res.status_code == 200:
-        print("✅ SUCCÈS TOTAL ! Le post et l'image sont publiés sur ta page Facebook !")
+        print("✅ SUCCÈS TOTAL ! Le post et l'image officielle HD sont publiés sur ta page Facebook !")
         return True
     else:
         print(f"❌ Erreur Facebook : {res.text}")
