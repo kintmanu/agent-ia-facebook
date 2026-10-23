@@ -114,24 +114,29 @@ def download_image(prompt):
 
 # 5. Le Facteur : Publication sur Facebook
 def get_page_access_token():
-    # Si l'utilisateur a mis son User Token, on extrait automatiquement le vrai Token de Page
     url = f"https://graph.facebook.com/v19.0/me/accounts?access_token={FB_PAGE_ACCESS_TOKEN}"
     try:
         res = requests.get(url, timeout=20)
         if res.status_code == 200:
             pages = res.json().get("data", [])
-            print(f"📄 Pages accessibles avec ce compte : {[p.get('name') for p in pages]}")
+            print("📄 Pages détectées :")
             for p in pages:
-                if str(p.get("id")) == str(FB_PAGE_ID):
-                    print(f"🔑 Token officiel trouvé pour la page : {p.get('name')}")
-                    return p.get("access_token"), p.get("id")
+                print(f"  - Nom: {p.get('name')} | ID: {p.get('id')}")
+            
+            # Recherche prioritaire de la page "Emmanuel kint"
+            for p in pages:
+                name = p.get("name", "").strip().lower()
+                pid = str(p.get("id"))
+                if "emmanuel" in name or pid == str(FB_PAGE_ID):
+                    print(f"🎯 Page cible sélectionnée : {p.get('name')} (ID: {pid})")
+                    return p.get("access_token"), pid
+                    
             if pages:
-                # Si l'ID diffère légèrement, on prend la première page dont il est admin
                 first = pages[0]
-                print(f"🔑 Utilisation de la page trouvée : {first.get('name')} (ID: {first.get('id')})")
+                print(f"⚠️ Page de repli : {first.get('name')}")
                 return first.get("access_token"), first.get("id")
     except Exception as e:
-        print(f"Vérification /me/accounts : {e}")
+        print(f"Erreur recherche page : {e}")
         
     return FB_PAGE_ACCESS_TOKEN, FB_PAGE_ID
 
