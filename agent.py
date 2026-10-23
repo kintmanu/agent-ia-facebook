@@ -30,7 +30,6 @@ def save_to_history(link):
 # 2. Le Radar : Recherche des tendances IA du jour
 def fetch_ai_news():
     history = load_history()
-    # Flux RSS Google News sur l'actualité de l'intelligence artificielle
     rss_url = "https://news.google.com/rss/search?q=intelligence+artificielle+IA+when:2d&hl=fr&gl=FR&ceid=FR:fr"
     feed = feedparser.parse(rss_url)
     
@@ -88,16 +87,13 @@ TÂCHE :
 - Pourquoi c'est important ou ce que ça change pour l'avenir.
 - Une question ouverte à la fin pour inciter les gens à commenter.
 - 4 ou 5 hashtags pertinents (ex: #IntelligenceArtificielle #IA #TechNews #Innovation).
-3. Donne un prompt visuel en anglais ULTRA SOIGNÉ pour générer une image sublime de qualité studio :
-- Style : Rendu 3D cinématique 8K ou photographie futuriste hyperréaliste.
-- Éclairage : Éclairage volumétrique dramatique, reflets néon, esthétique premium et épurée (pas de visages bizarres ni de texte déformé).
-- Exemples d'ambiance : "Hyper-detailed glowing AI neural network chip, golden and electric blue light, floating digital particles, cinematic octane render 8k, photorealistic masterpiece".
+3. Donne un prompt visuel en anglais pour une photographie moderne et ultra réaliste du sujet (pas de visages déformés, pas de texte dans l'image, style magazine Forbes / Wired tech).
 
 FORMAT DE RÉPONSE OBLIGATOIRE (en JSON strict) :
 {{
   "selected_link": "lien de l'article choisi parmi la liste",
   "post_text": "le texte complet du post Facebook avec émojis et hashtags",
-  "image_prompt": "description visuelle détaillée en anglais, cinematic 8k, photorealistic, masterpiece"
+  "image_prompt": "description visuelle en anglais, clean tech photography, photorealistic, 8k resolution"
 }}
 Ne renvoie rien d'autre que ce JSON."""
 
@@ -105,27 +101,57 @@ Ne renvoie rien d'autre que ce JSON."""
     clean_json = raw_output.strip().replace("```json", "").replace("```", "").strip()
     return json.loads(clean_json)
 
-# 4. L'Artiste : Téléchargement de l'image Pollinations (Moteur FLUX Ultra-HD)
+# 4. L'Artiste : Génération d'images haute qualité (Google Imagen 3 + FLUX)
 def download_image(prompt):
-    import random
-    enhanced_prompt = f"{prompt}, 8k resolution, cinematic lighting, photorealistic, octane render, masterpiece, hyperdetailed"
-    encoded = urllib.parse.quote(enhanced_prompt)
-    seed = random.randint(1, 999999)
-    image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1080&height=1080&model=flux&nologo=true&enhance=true&seed={seed}"
-    print(f"🎨 Génération de l'image Haute Définition avec le moteur FLUX...")
+    # Option 1 : Essai avec le modèle officiel Google Imagen 3
     try:
-        res = requests.get(image_url, timeout=60)
-        if res.status_code == 200 and len(res.content) > 10000:
-            return res.content
-        else:
-            # Repli si FLUX temporairement occupé
-            print("Tentative avec le moteur alternatif...")
-            fb_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1080&height=1080&nologo=true&seed={seed}"
-            res_fb = requests.get(fb_url, timeout=40)
-            if res_fb.status_code == 200:
-                return res_fb.content
+        from google.genai import types
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        for img_model in ["imagen-3.0-generate-002", "imagen-4.0-generate-001"]:
+            try:
+                print(f"🎨 Tentative avec le modèle Google officiel : {img_model}...")
+                res = client.models.generate_images(
+                    model=img_model,
+                    prompt=f"{prompt}, award winning photography, ultra-detailed, photorealistic, 4k",
+                    config=types.GenerateImagesConfig(
+                        number_of_images=1,
+                        output_mime_type="image/jpeg",
+                        aspect_ratio="1:1"
+                    )
+                )
+                if res.generated_images:
+                    print(f"✨ Victoire ! Image somptueuse générée par Google {img_model} !")
+                    return res.generated_images[0].image.image_bytes
+            except Exception as e:
+                print(f"Google {img_model} : {e}")
     except Exception as e:
-        print(f"Erreur téléchargement image : {e}")
+        print(f"Erreur Imagen : {e}")
+
+    # Option 2 : Moteur FLUX Ultra-HD
+    import random
+    clean_prompt = prompt.replace("'", "").replace('"', '')
+    enhanced = f"{clean_prompt}, clean modern tech aesthetic, photorealistic, cinematic 8k, professional photography, studio lighting, hyper-detailed"
+    encoded = urllib.parse.quote(enhanced)
+    seed = random.randint(1000, 999999)
+    
+    flux_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1080&height=1080&model=flux&nologo=true&enhance=true&seed={seed}"
+    print("🎨 Génération via le moteur FLUX Ultra-HD...")
+    try:
+        res = requests.get(flux_url, timeout=60)
+        if res.status_code == 200 and len(res.content) > 15000:
+            return res.content
+    except Exception as e:
+        print(f"FLUX indisponible : {e}")
+
+    # Option 3 : Moteur Turbo
+    try:
+        fb_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1080&height=1080&model=turbo&nologo=true&seed={seed}"
+        res_fb = requests.get(fb_url, timeout=40)
+        if res_fb.status_code == 200:
+            return res_fb.content
+    except Exception as e:
+        print(f"Moteur Turbo indisponible : {e}")
+
     return None
 
 # 5. Le Facteur : Publication sur Facebook
