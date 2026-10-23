@@ -88,13 +88,16 @@ TÂCHE :
 - Pourquoi c'est important ou ce que ça change pour l'avenir.
 - Une question ouverte à la fin pour inciter les gens à commenter.
 - 4 ou 5 hashtags pertinents (ex: #IntelligenceArtificielle #IA #TechNews #Innovation).
-3. Donne un prompt court en anglais pour générer une illustration 3D futuriste adaptée à ce sujet.
+3. Donne un prompt visuel en anglais ULTRA SOIGNÉ pour générer une image sublime de qualité studio :
+- Style : Rendu 3D cinématique 8K ou photographie futuriste hyperréaliste.
+- Éclairage : Éclairage volumétrique dramatique, reflets néon, esthétique premium et épurée (pas de visages bizarres ni de texte déformé).
+- Exemples d'ambiance : "Hyper-detailed glowing AI neural network chip, golden and electric blue light, floating digital particles, cinematic octane render 8k, photorealistic masterpiece".
 
 FORMAT DE RÉPONSE OBLIGATOIRE (en JSON strict) :
 {{
   "selected_link": "lien de l'article choisi parmi la liste",
   "post_text": "le texte complet du post Facebook avec émojis et hashtags",
-  "image_prompt": "description visuelle en anglais pour l'image (ex: futuristic glowing AI robot processor, 3d render, neon style, 8k resolution)"
+  "image_prompt": "description visuelle détaillée en anglais, cinematic 8k, photorealistic, masterpiece"
 }}
 Ne renvoie rien d'autre que ce JSON."""
 
@@ -102,14 +105,27 @@ Ne renvoie rien d'autre que ce JSON."""
     clean_json = raw_output.strip().replace("```json", "").replace("```", "").strip()
     return json.loads(clean_json)
 
-# 4. L'Artiste : Téléchargement de l'image Pollinations
+# 4. L'Artiste : Téléchargement de l'image Pollinations (Moteur FLUX Ultra-HD)
 def download_image(prompt):
-    encoded = urllib.parse.quote(prompt)
-    image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1080&height=1080&nologo=true&seed=42"
-    print(f"🎨 Génération de l'image avec Pollinations.ai...")
-    res = requests.get(image_url, timeout=40)
-    if res.status_code == 200:
-        return res.content
+    import random
+    enhanced_prompt = f"{prompt}, 8k resolution, cinematic lighting, photorealistic, octane render, masterpiece, hyperdetailed"
+    encoded = urllib.parse.quote(enhanced_prompt)
+    seed = random.randint(1, 999999)
+    image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1080&height=1080&model=flux&nologo=true&enhance=true&seed={seed}"
+    print(f"🎨 Génération de l'image Haute Définition avec le moteur FLUX...")
+    try:
+        res = requests.get(image_url, timeout=60)
+        if res.status_code == 200 and len(res.content) > 10000:
+            return res.content
+        else:
+            # Repli si FLUX temporairement occupé
+            print("Tentative avec le moteur alternatif...")
+            fb_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1080&height=1080&nologo=true&seed={seed}"
+            res_fb = requests.get(fb_url, timeout=40)
+            if res_fb.status_code == 200:
+                return res_fb.content
+    except Exception as e:
+        print(f"Erreur téléchargement image : {e}")
     return None
 
 # 5. Le Facteur : Publication sur Facebook
