@@ -1,6 +1,8 @@
 name: Agent IA Facebook
 
 on:
+  push:
+    branches: [ main ]
   schedule:
     # S'exécute automatiquement chaque matin à 9h00 UTC
     - cron: '0 9 * * *'
