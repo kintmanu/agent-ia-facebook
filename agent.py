@@ -1,10 +1,11 @@
 import os
 import sys
 import json
-import time
+import io
 import requests
 import feedparser
 from google import genai
+from huggingface_hub import InferenceClient
 
 # 1. Récupération des clés secrètes
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -104,39 +105,31 @@ Ne renvoie rien d'autre que ce JSON."""
     clean_json = raw_output.strip().replace("```json", "").replace("```", "").strip()
     return json.loads(clean_json)
 
-# 4. L'Artiste : Génération d'images via Hugging Face (FLUX.1 officiel - 0 Filigrane, 0 Logo)
-def query_huggingface_model(model_id, prompt):
-    api_url = f"https://api-inference.huggingface.co/models/{model_id}"
-    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-    payload = {"inputs": prompt}
-    
-    print(f"🎨 Génération de l'image officielle avec Hugging Face ({model_id})...")
-    for attempt in range(3):
-        res = requests.post(api_url, headers=headers, json=payload, timeout=60)
-        if res.status_code == 200 and len(res.content) > 10000:
-            print(f"✨ Image générée avec succès par {model_id} (Zéro logo, qualité pro) !")
-            return res.content
-        elif res.status_code == 503:
-            print("⏳ Modèle en cours de chargement sur Hugging Face, attente 10s...")
-            time.sleep(10)
-        else:
-            print(f"Hugging Face {model_id} réponse : {res.status_code} - {res.text[:100]}")
-            break
-    return None
-
+# 4. L'Artiste : Génération d'images via le SDK officiel Hugging Face (FLUX.1 - 0 Filigrane)
 def download_image(prompt):
-    if HF_TOKEN:
-        # 1. Modèle FLUX.1 officiel de Black Forest Labs (Le sommet de la qualité)
-        img = query_huggingface_model("black-forest-labs/FLUX.1-schnell", prompt)
-        if img:
-            return img
+    if not HF_TOKEN:
+        print("⚠️ HF_TOKEN non configuré.")
+        return None
+        
+    print("🎨 Connexion au SDK officiel Hugging Face...")
+    client = InferenceClient(api_key=HF_TOKEN)
+    
+    models = [
+        "black-forest-labs/FLUX.1-schnell",
+        "stabilityai/stable-diffusion-xl-base-1.0"
+    ]
+    
+    for model_id in models:
+        try:
+            print(f"Tentative de création avec {model_id}...")
+            image = client.text_to_image(prompt, model=model_id)
+            byte_arr = io.BytesIO()
+            image.save(byte_arr, format="JPEG", quality=95)
+            print(f"✨ SUCCÈS : Image générée par {model_id} (Zéro logo, qualité pro) !")
+            return byte_arr.getvalue()
+        except Exception as e:
+            print(f"Hugging Face ({model_id}) : {e}")
             
-        # 2. Modèle de secours Stable Diffusion XL de Stability AI
-        img = query_huggingface_model("stabilityai/stable-diffusion-xl-base-1.0", prompt)
-        if img:
-            return img
-
-    print("⚠️ Impossible d'obtenir l'image via Hugging Face.")
     return None
 
 # 5. Le Facteur : Publication sur Facebook
