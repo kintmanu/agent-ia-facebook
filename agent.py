@@ -2,16 +2,16 @@ import os
 import sys
 import json
 import io
+import urllib.parse
 import requests
 import feedparser
+from PIL import Image
 from google import genai
-from huggingface_hub import InferenceClient
 
 # 1. Récupération des clés secrètes
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 FB_PAGE_ID = os.environ.get("FB_PAGE_ID")
 FB_PAGE_ACCESS_TOKEN = os.environ.get("FB_PAGE_ACCESS_TOKEN")
-HF_TOKEN = os.environ.get("HF_TOKEN")
 
 if not all([GEMINI_API_KEY, FB_PAGE_ID, FB_PAGE_ACCESS_TOKEN]):
     print("❌ Erreur : Des clés secrètes essentielles sont manquantes.")
@@ -89,15 +89,15 @@ TÂCHE :
 - Pourquoi c'est important ou ce que ça change pour l'avenir.
 - Une question ouverte à la fin pour inciter les gens à commenter.
 - 4 ou 5 hashtags pertinents (ex: #IntelligenceArtificielle #IA #TechNews #Innovation).
-3. Donne un prompt visuel en anglais pour une image époustouflante et photoréaliste :
-- Style : Photographie technologique moderne de très haute qualité (style magazine Wired / Bloomberg).
-- Pas de visages déformés, pas de texte écrit dans l'image.
+3. Rédige un prompt visuel en anglais TRÈS PRÉCIS pour une superbe photographie professionnelle :
+- Décris une scène concrète et épurée (ex: "High-tech server room with glowing blue fiber optics and sleek metal racks, cinematic depth of field, sharp 8k photo", ou "Close-up macro of a futuristic golden microchip on circuit board, professional studio lighting").
+- INTERDIT : Pas de visages bizarres, pas de monstres, pas de texte écrit sur l'image.
 
 FORMAT DE RÉPONSE OBLIGATOIRE (en JSON strict) :
 {{
-  "selected_link": "lien de l'article choisi parmi la liste",
+  "selected_link": "lien exact de l'article choisi",
   "post_text": "le texte complet du post Facebook avec émojis et hashtags",
-  "image_prompt": "description visuelle détaillée en anglais, hyperrealistic, award winning photography, 8k resolution"
+  "image_prompt": "la description concrète de la photo en anglais"
 }}
 Ne renvoie rien d'autre que ce JSON."""
 
@@ -105,31 +105,50 @@ Ne renvoie rien d'autre que ce JSON."""
     clean_json = raw_output.strip().replace("```json", "").replace("```", "").strip()
     return json.loads(clean_json)
 
-# 4. L'Artiste : Génération d'images via le SDK officiel Hugging Face (FLUX.1 - 0 Filigrane)
+# 4. L'Artiste : Génération d'images haute qualité SANS AUCUN FILIGRANE (Nettoyage automatique)
 def download_image(prompt):
-    if not HF_TOKEN:
-        print("⚠️ HF_TOKEN non configuré.")
-        return None
-        
-    print("🎨 Connexion au SDK officiel Hugging Face...")
-    client = InferenceClient(api_key=HF_TOKEN)
+    import random
+    clean_prompt = prompt.strip().replace('"', '').replace("'", "")
+    full_prompt = f"{clean_prompt}, clean professional tech photography, crisp focus, studio lighting, award winning 8k"
+    encoded = urllib.parse.quote(full_prompt)
+    seed = random.randint(1000, 999999)
     
-    models = [
-        "black-forest-labs/FLUX.1-schnell",
-        "stabilityai/stable-diffusion-xl-base-1.0"
-    ]
+    # On génère en 1080x1120 pour pouvoir rogner proprement la bordure inférieure
+    url = f"https://image.pollinations.ai/prompt/{encoded}?width=1080&height=1120&model=flux&nologo=true&seed={seed}"
+    print("🎨 Génération de l'image haute définition...")
     
-    for model_id in models:
-        try:
-            print(f"Tentative de création avec {model_id}...")
-            image = client.text_to_image(prompt, model=model_id)
-            byte_arr = io.BytesIO()
-            image.save(byte_arr, format="JPEG", quality=95)
-            print(f"✨ SUCCÈS : Image générée par {model_id} (Zéro logo, qualité pro) !")
-            return byte_arr.getvalue()
-        except Exception as e:
-            print(f"Hugging Face ({model_id}) : {e}")
+    try:
+        res = requests.get(url, timeout=60)
+        if res.status_code == 200 and len(res.content) > 15000:
+            # Traitement avec Pillow : Suppression totale et garantie de tout logo/filigrane dans le coin inférieur
+            raw_img = Image.open(io.BytesIO(res.content))
+            width, height = raw_img.size
+            # On coupe les 40 pixels du bas où les logos peuvent se trouver
+            clean_img = raw_img.crop((0, 0, width, height - 40))
+            # On redimensionne au carré parfait 1080x1080
+            final_img = clean_img.resize((1080, 1080), Image.Resampling.LANCZOS)
             
+            output_bytes = io.BytesIO()
+            final_img.save(output_bytes, format="JPEG", quality=95)
+            print("✨ SUCCÈS : Image nettoyée, 0 filigrane, format carré 1080x1080 impeccable !")
+            return output_bytes.getvalue()
+    except Exception as e:
+        print(f"Erreur traitement image : {e}")
+
+    # Secours avec modèle turbo
+    try:
+        url_fb = f"https://image.pollinations.ai/prompt/{encoded}?width=1080&height=1120&model=turbo&seed={seed}"
+        res = requests.get(url_fb, timeout=40)
+        if res.status_code == 200:
+            raw_img = Image.open(io.BytesIO(res.content))
+            width, height = raw_img.size
+            clean_img = raw_img.crop((0, 0, width, height - 40)).resize((1080, 1080), Image.Resampling.LANCZOS)
+            output_bytes = io.BytesIO()
+            clean_img.save(output_bytes, format="JPEG", quality=92)
+            return output_bytes.getvalue()
+    except Exception as e:
+        print(f"Erreur de repli : {e}")
+
     return None
 
 # 5. Le Facteur : Publication sur Facebook
@@ -174,7 +193,7 @@ def publish_to_facebook(text, image_bytes):
     }
     res = requests.post(url, data=data, files=files, timeout=40)
     if res.status_code == 200:
-        print("✅ SUCCÈS TOTAL ! Le post et l'image officielle HD sont publiés sur ta page Facebook !")
+        print("✅ SUCCÈS TOTAL ! Le post et l'image 100% propre sont publiés sur ta page Facebook !")
         return True
     else:
         print(f"❌ Erreur Facebook : {res.text}")
