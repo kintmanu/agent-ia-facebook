@@ -50,11 +50,10 @@ def call_gemini(prompt):
     client = genai.Client(api_key=GEMINI_API_KEY)
     
     models_to_try = [
+        "gemini-flash-lite-latest",
+        "gemini-3.0-flash",
         "gemini-flash-latest",
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-2.5-pro",
-        "gemini-flash-lite-latest"
+        "gemini-2.0-flash"
     ]
     
     last_err = ""
@@ -114,19 +113,43 @@ def download_image(prompt):
     return None
 
 # 5. Le Facteur : Publication sur Facebook
+def get_page_access_token():
+    # Si l'utilisateur a mis son User Token, on extrait automatiquement le vrai Token de Page
+    url = f"https://graph.facebook.com/v19.0/me/accounts?access_token={FB_PAGE_ACCESS_TOKEN}"
+    try:
+        res = requests.get(url, timeout=20)
+        if res.status_code == 200:
+            pages = res.json().get("data", [])
+            print(f"📄 Pages accessibles avec ce compte : {[p.get('name') for p in pages]}")
+            for p in pages:
+                if str(p.get("id")) == str(FB_PAGE_ID):
+                    print(f"🔑 Token officiel trouvé pour la page : {p.get('name')}")
+                    return p.get("access_token"), p.get("id")
+            if pages:
+                # Si l'ID diffère légèrement, on prend la première page dont il est admin
+                first = pages[0]
+                print(f"🔑 Utilisation de la page trouvée : {first.get('name')} (ID: {first.get('id')})")
+                return first.get("access_token"), first.get("id")
+    except Exception as e:
+        print(f"Vérification /me/accounts : {e}")
+        
+    return FB_PAGE_ACCESS_TOKEN, FB_PAGE_ID
+
 def publish_to_facebook(text, image_bytes):
-    print("🚀 Publication sur Facebook...")
-    url = f"https://graph.facebook.com/v19.0/{FB_PAGE_ID}/photos"
+    print("🚀 Préparation de la publication sur Facebook...")
+    token, target_page_id = get_page_access_token()
+    
+    url = f"https://graph.facebook.com/v19.0/{target_page_id}/photos"
     data = {
         "caption": text,
-        "access_token": FB_PAGE_ACCESS_TOKEN
+        "access_token": token
     }
     files = {
         "source": ("image.jpg", image_bytes, "image/jpeg")
     }
     res = requests.post(url, data=data, files=files, timeout=40)
     if res.status_code == 200:
-        print("✅ SUCCÈS ! Le post a été publié sur ta page Facebook !")
+        print("✅ SUCCÈS TOTAL ! Le post et l'image sont publiés sur ta page Facebook !")
         return True
     else:
         print(f"❌ Erreur Facebook : {res.text}")
