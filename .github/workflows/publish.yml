@@ -1,0 +1,43 @@
+name: Agent IA Facebook
+
+on:
+  schedule:
+    # S'exécute automatiquement chaque matin à 9h00 UTC
+    - cron: '0 9 * * *'
+  # Permet aussi de lancer manuellement d'un simple clic
+  workflow_dispatch:
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Configurer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Installer les outils
+        run: |
+          pip install -r requirements.txt
+
+      - name: Lancer l'agent IA
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+        run: |
+          python agent.py
+
+      - name: Sauvegarder l'historique anti-doublon
+        run: |
+          git config --global user.name "Agent IA Bot"
+          git config --global user.email "bot@github.com"
+          git add history.txt || true
+          git commit -m "Mise à jour de l'historique des posts" || true
+          git push || true
