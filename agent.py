@@ -4,6 +4,7 @@ import json
 import urllib.parse
 import requests
 import feedparser
+from google import genai
 
 # 1. Récupération des clés secrètes
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -12,9 +13,6 @@ FB_PAGE_ACCESS_TOKEN = os.environ.get("FB_PAGE_ACCESS_TOKEN")
 
 if not all([GEMINI_API_KEY, FB_PAGE_ID, FB_PAGE_ACCESS_TOKEN]):
     print("❌ Erreur : Une ou plusieurs clés secrètes sont manquantes dans GitHub Secrets.")
-    print(f"GEMINI_API_KEY présente: {bool(GEMINI_API_KEY)}")
-    print(f"FB_PAGE_ID présente: {bool(FB_PAGE_ID)}")
-    print(f"FB_PAGE_ACCESS_TOKEN présente: {bool(FB_PAGE_ACCESS_TOKEN)}")
     sys.exit(1)
 
 HISTORY_FILE = "history.txt"
@@ -47,52 +45,34 @@ def fetch_ai_news():
                 
     return fresh_articles
 
-# 3. Le Cerveau : Appel à Gemini
+# 3. Le Cerveau : Appel au SDK officiel Google Gen AI
 def call_gemini(prompt):
-    # Découverte automatique des modèles disponibles pour cette clé
-    list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
-    try:
-        list_res = requests.get(list_url, timeout=20)
-        print(f"Status vérification des modèles : {list_res.status_code}")
-        if list_res.status_code == 200:
-            data = list_res.json()
-            available = [
-                m["name"] for m in data.get("models", [])
-                if "generateContent" in m.get("supportedGenerationMethods", [])
-            ]
-            print(f"Modèles compatibles trouvés ({len(available)}) : {available[:5]}")
-            if available:
-                # On teste les modèles trouvés
-                for model_full in available:
-                    model_id = model_full.replace("models/", "")
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={GEMINI_API_KEY}"
-                    headers = {"Content-Type": "application/json"}
-                    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-                    r = requests.post(url, headers=headers, json=payload, timeout=30)
-                    if r.status_code == 200:
-                        return r.json()["candidates"][0]["content"]["parts"][0]["text"]
-                    else:
-                        print(f"Modèle {model_id} a échoué ({r.status_code})")
-        else:
-            print(f"Erreur lors de la liste des modèles : {list_res.text}")
-    except Exception as e:
-        print(f"Exception lors de la liste des modèles : {e}")
-
-    # Essai de secours avec l'API v1 standard
-    for model in ["gemini-1.5-flash", "gemini-pro"]:
-        url = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent?key={GEMINI_API_KEY}"
-        headers = {"Content-Type": "application/json"}
-        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    
+    models_to_try = [
+        "gemini-flash-latest",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-2.5-pro",
+        "gemini-flash-lite-latest"
+    ]
+    
+    last_err = ""
+    for model_name in models_to_try:
         try:
-            r = requests.post(url, headers=headers, json=payload, timeout=30)
-            if r.status_code == 200:
-                return r.json()["candidates"][0]["content"]["parts"][0]["text"]
-            else:
-                print(f"v1 {model} status {r.status_code}: {r.text}")
+            print(f"Tentative de génération avec le modèle : {model_name}...")
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
+            if response.text:
+                print(f"✅ Succès avec {model_name} !")
+                return response.text
         except Exception as e:
-            print(f"v1 {model} erreur: {e}")
-
-    raise Exception("Impossible de générer le post : vérifie la clé GEMINI_API_KEY dans GitHub Secrets.")
+            last_err = str(e)
+            print(f"⚠️ {model_name} indisponible : {e}")
+            
+    raise Exception(f"Impossible de contacter Gemini : {last_err}")
 
 def generate_post(articles):
     articles_text = "\n".join([f"- {a['title']} (Lien: {a['link']})" for a in articles])
