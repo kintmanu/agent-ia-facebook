@@ -2,7 +2,30 @@
   "niche": "Intelligence Artificielle & Outils Tech",
   "keywords": "intelligence artificielle IA",
   "tone": "Professionnel, captivant et vulgarisé",
-  "schedule_time": "14h00",
-  "frequency": "1 fois par jour",
+  "schedule_slots": {
+    "morning": {
+      "enabled": true,
+      "time": "08h00",
+      "label": "Matin"
+    },
+    "midday": {
+      "enabled": false,
+      "time": "13h00",
+      "label": "Midi"
+    },
+    "evening": {
+      "enabled": true,
+      "time": "19h00",
+      "label": "Soir"
+    }
+  },
+  "frequency_label": "2 fois par jour (Matin & Soir)",
+  "campaign_duration_days": 7,
+  "campaign_start_date": "2026-10-24",
+  "campaign_end_date": "2026-10-31",
+  "campaign_content_type": "Mixte (Actualités le matin & Publicités/Offres le soir)",
+  "campaign_ad_topic": "Formations pratiques en IA et Solutions d'automatisation",
+  "active_campaign": true,
+  "posts_published_in_campaign": 0,
   "last_updated": "2026-10-24"
 }
