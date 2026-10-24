@@ -15,10 +15,6 @@ FB_PAGE_ACCESS_TOKEN = os.environ.get("FB_PAGE_ACCESS_TOKEN")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-if not all([GEMINI_API_KEY, FB_PAGE_ID, FB_PAGE_ACCESS_TOKEN]):
-    print("❌ Erreur : Des clés secrètes Facebook/Gemini sont manquantes.")
-    sys.exit(1)
-
 CONFIG_FILE = "config.json"
 HISTORY_FILE = "history.txt"
 
@@ -47,7 +43,7 @@ def save_to_history(link):
         f.write(link + "\n")
 
 # 2. Le Radar : Recherche des tendances selon la niche configurée
-def fetch_ai_news(config):
+def fetch_ai_news(config, force=False):
     history = load_history()
     query = urllib.parse.quote(config.get("keywords", "intelligence artificielle IA"))
     rss_url = f"https://news.google.com/rss/search?q={query}+when:2d&hl=fr&gl=FR&ceid=FR:fr"
@@ -57,11 +53,14 @@ def fetch_ai_news(config):
     for entry in feed.entries[:10]:
         link = entry.get("link", "")
         title = entry.get("title", "")
-        if link not in history and title:
+        if (force or link not in history) and title:
             fresh_articles.append({"title": title, "link": link})
             if len(fresh_articles) >= 5:
                 break
                 
+    if not fresh_articles and force and feed.entries:
+        fresh_articles = [{"title": feed.entries[0].get("title", ""), "link": feed.entries[0].get("link", "")}]
+        
     return fresh_articles
 
 # 3. Le Cerveau : Appel au SDK officiel Google Gen AI
@@ -220,7 +219,7 @@ def send_telegram_report(text, image_bytes, niche):
         
     print("📲 Envoi du rapport en direct sur ton Telegram...")
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
-    caption = f"🚀 **NOUVEAU POST FACEBOOK PUBLIÉ !**\n📌 *Niche : {niche}*\n\n{text[:900]}...\n\n👉 [Voir sur Facebook](https://www.facebook.com/profile.php?id=61578925910517)"
+    caption = f"🚀 **NOUVEAU POST FACEBOOK PUBLIÉ !**\n📌 *Niche : {niche}*\n\n{text[:800]}...\n\n👉 [Voir sur Facebook](https://www.facebook.com/profile.php?id=61578925910517)"
     
     data = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -235,7 +234,6 @@ def send_telegram_report(text, image_bytes, niche):
         if r.status_code == 200:
             print("✅ Rapport Telegram envoyé avec succès sur ton téléphone !")
         else:
-            # Fallback en message texte si caption trop longue
             requests.post(
                 f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
                 json={
@@ -244,15 +242,42 @@ def send_telegram_report(text, image_bytes, niche):
                 },
                 timeout=20
             )
+            print("✅ Rapport Telegram envoyé (texte) !")
     except Exception as e:
         print(f"Erreur envoi Telegram : {e}")
 
+def test_telegram_connection():
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("❌ TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID manquant.")
+        return False
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": "🔔 **Connexion Réussie !**\nTon bot Telegram est officiellement relié à ton Agent IA Facebook ! Tu recevras ici un rapport complet avec photo à chaque publication.",
+        "parse_mode": "Markdown"
+    }
+    try:
+        r = requests.post(url, json=payload, timeout=20)
+        if r.status_code == 200:
+            print("✅ Message de test Telegram envoyé avec succès !")
+            return True
+        else:
+            print(f"❌ Erreur Telegram ({r.status_code}): {r.text}")
+    except Exception as e:
+        print(f"❌ Exception Telegram : {e}")
+    return False
+
 # Orchestration
 def main():
+    if "--test-telegram" in sys.argv:
+        test_telegram_connection()
+        return
+
+    force = "--force" in sys.argv
     config = load_config()
     print(f"📌 Niche active : {config.get('niche')}")
-    print("🔍 Recherche des tendances...")
-    articles = fetch_ai_news(config)
+    print(f"🔍 Recherche des tendances (mode forcé: {force})...")
+    articles = fetch_ai_news(config, force=force)
     if not articles:
         print("ℹ️ Aucune nouvelle actualité détectée pour le moment.")
         return
