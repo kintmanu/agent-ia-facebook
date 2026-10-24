@@ -439,8 +439,31 @@ with tab_schedule:
         config["active_campaign"] = camp_active_toggle
         
         agent.save_config(config)
-        st.success(f"🎉 **PROGRAMMATION ENREGISTRÉE AVEC SUCCÈS !**\n\n- Période : du **{start_date.strftime('%d/%m/%Y')}** au **{end_date.strftime('%d/%m/%Y')}** ({final_days} jours)\n- Créneaux : **{nb_creneaux_actifs} publication(s) par jour**\n- Total : **{total_posts} publications programmées**.")
-        st.rerun()
+        st.toast("🎉 Programmation enregistrée avec succès !", icon="✅")
+        
+        st.success(f"""✅ **PROGRAMMATION ENREGISTRÉE ET VALIDÉE !**
+
+📅 **Période active :** Du **{start_date.strftime('%d/%m/%Y')}** au **{end_date.strftime('%d/%m/%Y')}** ({final_days} jours)  
+⏰ **Créneaux configurés :** **{nb_creneaux_actifs} publication(s) par jour**  
+📦 **Total prévu :** **{total_posts} publications Facebook**  
+🎯 **Stratégie :** {selected_content_type}  
+🚀 **Statut :** {'🟢 Active' if camp_active_toggle else '⏸️ En pause'}
+
+*Confirmation également envoyée en direct sur ton Telegram !*""")
+
+        # Notification Telegram immédiate
+        active_slots_list = []
+        if m_enabled: active_slots_list.append(f"Matin ({m_time})")
+        if d_enabled: active_slots_list.append(f"Midi ({d_time})")
+        if e_enabled: active_slots_list.append(f"Soir ({e_time})")
+        slots_text = ", ".join(active_slots_list) if active_slots_list else "Aucun"
+        
+        bot.send_tg_message(f"""🔔 **Nouvelle programmation enregistrée par Emmanuel :**
+
+📅 Période : {start_date.strftime('%d/%m/%Y')} au {end_date.strftime('%d/%m/%Y')} ({final_days} jours)
+⏰ Créneaux : {slots_text}
+📦 Volume : {total_posts} publications Facebook
+🎯 Stratégie : {selected_content_type}""")
 
 # ==========================================
 # ONGLET 3 : CRÉATEUR DE PUBLICITÉS EXPRESS
