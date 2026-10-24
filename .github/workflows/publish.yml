@@ -4,9 +4,11 @@ on:
   push:
     branches: [ main ]
   schedule:
-    # S'exécute automatiquement chaque matin à 9h00 UTC
-    - cron: '0 9 * * *'
-  # Permet aussi de lancer manuellement d'un simple clic
+    # Plusieurs créneaux clés de la journée (Matin 8h, Après-midi 14h, Soir 18h UTC)
+    - cron: '0 8 * * *'
+    - cron: '0 14 * * *'
+    - cron: '0 18 * * *'
+  # Permet aussi de déclencher manuellement d'un simple clic
   workflow_dispatch:
 
 jobs:
@@ -28,7 +30,7 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Lancer l'agent IA
+      - name: Lancer l'agent IA Facebook
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
@@ -40,8 +42,8 @@ jobs:
 
       - name: Sauvegarder l'historique et la configuration
         run: |
-          git config --global user.name "Agent IA Bot"
-          git config --global user.email "bot@github.com"
+          git config --global user.name "kintmanu"
+          git config --global user.email "kintmanu@users.noreply.github.com"
           git add history.txt config.json || true
           git commit -m "Mise à jour historique et config" || true
           git push || true
