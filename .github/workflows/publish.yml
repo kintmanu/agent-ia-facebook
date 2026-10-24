@@ -33,14 +33,15 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python agent.py
 
-      - name: Sauvegarder l'historique anti-doublon
+      - name: Sauvegarder l'historique et la configuration
         run: |
           git config --global user.name "Agent IA Bot"
           git config --global user.email "bot@github.com"
-          git add history.txt || true
-          git commit -m "Mise à jour de l'historique des posts" || true
+          git add history.txt config.json || true
+          git commit -m "Mise à jour historique et config" || true
           git push || true
