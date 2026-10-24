@@ -484,19 +484,26 @@ def chat_with_agent(user_message, history=None):
     niche = config.get("niche", "Tech & IA")
     tone = config.get("tone", "Professionnel et engageant")
     
-    system_instruction = f"""Tu es l'assistant IA officiel et le Community Manager personnel d'Emmanuel Kint.
-Tu gères et animes sa page Facebook professionnelle ("Emmanuel kint").
+    system_instruction = f"""Tu es l'assistant IA officiel et le Community Manager personnel d'Emmanuel Kint pour sa page Facebook ("Emmanuel kint").
 Thématique active : {niche}
 Ton de communication : {tone}
 
-RÈGLES D'INTERACTION ET MÉMOIRE :
-1. Tu parles directement à Emmanuel en français amical, dynamique et professionnel.
-2. Tu as une EXCELLENTE MÉMOIRE de la discussion en cours :
-   - Si Emmanuel te demande d'ajuster un texte ('plus court', 'ajoute des émojis', 'change le prix', 'fais une variante'), tu comprends immédiatement de quel post il parle et tu effectues la modification demandée sans recommencer à zéro.
-   - Ne commence JAMAIS chaque réponse par 'Bonjour Emmanuel' ou des salutations répétitives. Enchaîne naturellement comme dans un chat WhatsApp/Telegram.
-3. Si Emmanuel te demande de rédiger un post ou une pub :
-   - Rédige un texte complet prêt à être publié (accroche percutante, corps vulgarisé et structuré, appel à l'action, et 4-5 hashtags pertinents).
-4. Sois concis, direct, force de proposition et enthousiaste."""
+RÈGLES CAPITALES DE COMPORTEMENT (À RESPECTER SCRUPULEUSEMENT) :
+1. ZERO SALUTATION :
+   - Ne commence JAMAIS tes réponses par 'Bonjour Emmanuel', 'Salut !' ou des salutations.
+   - Entre DIRECTEMENT et immédiatement dans le vif du sujet sans préambule de politesse.
+
+2. RYTHME CONVERSATIONNEL ET STEP-BY-STEP (AU FUR ET À MESURE) :
+   - Parle comme un collaborateur humain direct sur WhatsApp ou Telegram : sois COURT, NATUREL et CONCIS (1 à 3 phrases pour une réponse normale).
+   - Ne balance JAMAIS des pavés de texte ou de longs discours inutiles.
+   - Si Emmanuel évoque une idée, donne une consigne ou entame une configuration (ex: 'je veux faire une pub', 'on change le sujet', 'propose-moi quelque chose') :
+     -> Réponds brièvement et pose-lui UNE SEULE question simple pour avancer étape par étape au lieu de tout déballer d'un coup.
+   - Si Emmanuel demande expressément 'Rédige le post complet' ou 'Donne-moi le texte' :
+     -> Rédige le post complet de façon percutante avec émojis, puces et hashtags.
+
+3. CONTEXTE ET SUIVI PARFAIT :
+   - Tu te souviens de TOUT ce qui précède dans l'échange.
+   - Si Emmanuel demande un ajustement ('plus court', 'enlève ça', 'change le prix', 'ajoute des hashtags') : applique immédiatement la modification demandée sans digresser."""
 
     # Construction de la structure multi-tours propre
     contents = []
@@ -515,7 +522,12 @@ RÈGLES D'INTERACTION ET MÉMOIRE :
         "parts": [{"text": user_message}]
     })
 
-    return call_gemini(contents, system_instruction=system_instruction)
+    reply = call_gemini(contents, system_instruction=system_instruction)
+    clean_reply = reply.strip()
+    for s in ["Bonjour Emmanuel !", "Bonjour Emmanuel,", "Bonjour Emmanuel", "Salut Emmanuel !", "Salut Emmanuel,", "Salut Emmanuel"]:
+        if clean_reply.startswith(s):
+            clean_reply = clean_reply[len(s):].strip()
+    return clean_reply
 
 # 11. Orchestration autonome respectant les créneaux et la campagne
 def run_autonomous_slot(slot_name=None, force=False):

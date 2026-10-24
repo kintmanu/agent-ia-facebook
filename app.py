@@ -59,27 +59,21 @@ def ensure_telegram_listener():
             _BOT_THREAD_STARTED = True
             def runner():
                 import time
+                import requests
                 offset = 0
-                url = f"https://api.telegram.org/bot{TG_TOKEN}/getUpdates"
+                try:
+                    init_res = requests.get(f"https://api.telegram.org/bot{TG_TOKEN}/getUpdates?offset=-1", timeout=10)
+                    if init_res.status_code == 200:
+                        res_list = init_res.json().get("result", [])
+                        if res_list:
+                            offset = res_list[-1]["update_id"] + 1
+                except Exception:
+                    pass
                 while True:
                     try:
-                        params = {"offset": offset, "timeout": 20}
-                        res = requests.get(url, params=params, timeout=30)
-                        if res.status_code == 200:
-                            data = res.json()
-                            for upd in data.get("result", []):
-                                offset = upd["update_id"] + 1
-                                msg = upd.get("message", {})
-                                cid = str(msg.get("chat", {}).get("id", ""))
-                                txt = msg.get("text", "")
-                                if cid == str(TG_CHAT_ID) and txt:
-                                    bot.handle_telegram_message(txt, TG_TOKEN, TG_CHAT_ID)
-                        elif res.status_code == 409:
-                            time.sleep(10)
-                        else:
-                            time.sleep(4)
+                        offset = bot.poll_once(TG_TOKEN, TG_CHAT_ID, offset)
                     except Exception:
-                        time.sleep(5)
+                        time.sleep(4)
             t = threading.Thread(target=runner, daemon=True)
             t.start()
 

@@ -12,9 +12,10 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 FB_PAGE_ACCESS_TOKEN = os.environ.get("FB_PAGE_ACCESS_TOKEN")
 FB_PAGE_ID = os.environ.get("FB_PAGE_ID", "61578925910517")
 
-# Cache pour validation de brouillon et mémoire conversationnelle
+# Mémoire de travail
 PENDING_DRAFT = {}
 CHAT_HISTORY = []
+PROCESSED_UPDATE_IDS = set()
 
 def send_tg_message(text, token=None, chat_id=None):
     t = token or TELEGRAM_BOT_TOKEN
@@ -48,71 +49,64 @@ def handle_telegram_message(text, token=None, chat_id=None):
     config = agent.load_config()
     camp_status = agent.get_campaign_status(config)
 
-    # 1. Aide et Menu
+    # 1. Commande Menu / Aide
     if text_clean.lower() in ["/start", "aide", "help", "menu"]:
         slots = config.get("schedule_slots", {})
         active_slots = [f"{s.get('label')} ({s.get('time')})" for s in slots.values() if s.get("enabled")]
-        slots_str = ", ".join(active_slots) if active_slots else "Aucun créneau actif"
+        slots_str = ", ".join(active_slots) if active_slots else "Aucun"
 
-        menu = f"""👋 **Bonjour Emmanuel ! Je suis ton Agent IA Facebook.**
+        menu = f"""🤖 **Agent IA Facebook d'Emmanuel**
 
-Voici ce que tu peux faire directement depuis Telegram :
-💬 **Discussion continue :** Pose-moi des questions, demande des ajustements sur un texte ou une pub.
-🚀 **/publier :** Lance immédiatement une publication d'actualité avec photo studio sur Facebook.
-📢 **/pub [ton offre] :** Rédige une pub sur-mesure et crée son visuel (ex: `/pub Coaching Business -25%`).
-📊 **/campagne :** Affiche le statut complet de ta programmation (durée, créneaux, progression).
-💡 **/idees :** Te propose 3 idées fraîches de posts.
-📌 **/niche [nom] :** Modifie la thématique (ex: `/niche E-commerce & IA`).
+🚀 **/publier :** Publier une actu maintenant sur Facebook
+📢 **/pub [ton offre] :** Rédiger une pub et générer sa photo
+📊 **/campagne :** Voir l'état de la programmation en cours
+💡 **/idees :** 3 idées de sujets
+📌 **/niche [nom] :** Changer de thématique
 
-📊 *Campagne : {camp_status['start_date']} au {camp_status['end_date']} ({camp_status['days_remaining']} j restants)*
-⏰ *Créneaux choisis : {slots_str}*"""
+*Niche : {config.get('niche')}*
+*Créneaux : {slots_str}*
+*Ou écris-moi simplement ce que tu souhaites faire !*"""
         send_tg_message(menu, t, c)
         return
 
-    # 2. Statut Campagne et Programmation
+    # 2. Commande Statut de la Campagne
     if text_clean.lower() in ["/campagne", "/programme", "/horaire", "campagne", "programme"]:
         slots = config.get("schedule_slots", {})
-        slots_desc = []
-        for k, v in slots.items():
-            status_icon = "🟢" if v.get("enabled") else "⚪"
-            slots_desc.append(f"{status_icon} **{v.get('label')}** : {v.get('time')}")
+        slots_desc = [f"- **{v.get('label')}** : {v.get('time')} ({'Actif' if v.get('enabled') else 'Inactif'})" for v in slots.values()]
         
-        stat_msg = f"""📊 **PROGRAMMATION DE TA CAMPAGNE :**
+        stat_msg = f"""📊 **PROGRAMMATION ACTUELLE :**
 
-📅 **Période :** Du {camp_status['start_date']} au {camp_status['end_date']}
-⏳ **Jours restants :** {camp_status['days_remaining']} jours (sur {camp_status['total_days']} jours)
-📦 **Publications prévues :** {camp_status['posts_published']} publiées sur {camp_status['total_expected_posts']} prévues
-🎯 **Type de contenu :** {config.get('campaign_content_type')}
+- **Durée :** Du {camp_status['start_date']} au {camp_status['end_date']} ({camp_status['days_remaining']} j restants)
+- **Publications :** {camp_status['posts_published']} sur {camp_status['total_expected_posts']} prévues
+- **Type :** {config.get('campaign_content_type')}
 
-⏰ **Créneaux horaires quotidiens :**
-{chr(10).join(slots_desc)}
-
-*(Tu peux activer/désactiver Matin, Midi ou Soir et ajuster les heures sur ta Mini-App)*"""
+⏰ **Créneaux :**
+{chr(10).join(slots_desc)}"""
         send_tg_message(stat_msg, t, c)
         return
 
-    # 3. Publication Immédiate (/publier)
+    # 3. Commande Publication Immédiate (/publier)
     if text_clean.lower() == "/publier":
-        send_tg_message("🚀 **Reçu ! Préparation d'une publication immédiate...**\nRecherche d'actualité, rédaction Gemini, création image FLUX HD...", t, c)
+        send_tg_message("🚀 Je prépare et publie immédiatement le post d'actualité sur Facebook...", t, c)
         try:
             ok = agent.run_autonomous_slot(force=True)
             if not ok:
-                send_tg_message("⚠️ La publication n'a pas pu être finalisée.", t, c)
+                send_tg_message("⚠️ Impossible de finaliser la publication pour le moment.", t, c)
         except Exception as e:
             send_tg_message(f"❌ Erreur : {e}", t, c)
         return
 
-    # 4. Créateur de Publicité (/pub)
+    # 4. Commande Publicité (/pub)
     if text_clean.lower().startswith("/pub"):
         parts = text_clean.split(" ", 1)
-        if len(parts) > 1:
+        if len(parts) > 1 and parts[1].strip():
             offer = parts[1].strip()
-            send_tg_message(f"📢 **Conception de ta publicité en cours...**\nOffre : *{offer}*\nRédaction AIDA + Génération de la photo studio commerciale...", t, c)
+            send_tg_message(f"📢 Création de la publicité pour : *{offer}*...", t, c)
             try:
                 ad_data = agent.generate_ad_post(
                     product_name=offer,
                     offer_details=offer,
-                    cta="Écrivez-nous en message privé pour en profiter",
+                    cta="Écrivez-nous en privé pour en profiter",
                     audience="Grand public & Clients",
                     config=config
                 )
@@ -121,58 +115,111 @@ Voici ce que tu peux faire directement depuis Telegram :
                     PENDING_DRAFT["text"] = ad_data["post_text"]
                     PENDING_DRAFT["image"] = img
                     
-                    caption = f"✨ **APERÇU DE LA PUBLICITÉ PRÊTE :**\n\n{ad_data['post_text']}\n\n👉 Réponds **/valider** pour publier cette publicité maintenant sur Facebook !"
+                    caption = f"✨ **Aperçu de la publicité :**\n\n{ad_data['post_text']}\n\n👉 Envoie **/valider** pour publier cette pub sur Facebook !"
                     send_tg_photo(caption, img, t, c)
                 else:
-                    send_tg_message(f"📝 Voici le texte publicitaire rédigé :\n\n{ad_data['post_text']}", t, c)
+                    send_tg_message(f"📝 Voici le texte rédigé :\n\n{ad_data['post_text']}", t, c)
             except Exception as e:
-                send_tg_message(f"❌ Erreur création pub : {e}", t, c)
+                send_tg_message(f"❌ Erreur : {e}", t, c)
         else:
-            send_tg_message("📌 Précise ton offre après `/pub`, par exemple :\n`/pub Formation pratique en IA avec 30% de remise cette semaine`", t, c)
+            send_tg_message("📢 Que souhaites-tu promouvoir ?\nIndique ton offre après `/pub`, par exemple :\n`/pub Formation IA avec 30% de remise cette semaine`", t, c)
         return
 
-    # 5. Validation et envoi du brouillon
+    # 5. Validation du brouillon (/valider)
     if text_clean.lower() in ["/valider", "valider", "publie ça", "publier ça"]:
         if "text" in PENDING_DRAFT and "image" in PENDING_DRAFT:
             send_tg_message("🚀 Publication sur Facebook en cours...", t, c)
             ok, detail = agent.publish_to_facebook(PENDING_DRAFT["text"], PENDING_DRAFT["image"])
             if ok:
-                send_tg_message("✅ **SUCCÈS TOTAL ! Ta pub est maintenant en ligne sur Facebook !**\n👉 https://www.facebook.com/profile.php?id=61578925910517", t, c)
+                send_tg_message("✅ **Ta publicité est publiée sur ta Page Facebook !**\n👉 https://www.facebook.com/profile.php?id=61578925910517", t, c)
                 PENDING_DRAFT.clear()
             else:
                 send_tg_message(f"❌ Erreur Facebook : {detail}", t, c)
         else:
-            send_tg_message("ℹ️ Aucun brouillon en attente. Tu peux en concevoir un avec `/pub [mon offre]` ou publier une actu avec `/publier` !", t, c)
+            send_tg_message("ℹ️ Aucun brouillon en attente. Tu peux en concevoir un avec `/pub [mon offre]` ou lancer une actu avec `/publier`.", t, c)
         return
 
     # 6. Commande /niche
     if text_clean.lower().startswith("/niche"):
         parts = text_clean.split(" ", 1)
-        if len(parts) > 1:
+        if len(parts) > 1 and parts[1].strip():
             new_niche = parts[1].strip()
             config["niche"] = new_niche
             config["keywords"] = new_niche
             agent.save_config(config)
-            send_tg_message(f"✅ **Thématique mise à jour !**\nNiche active : **{new_niche}**.\nSynchronisé avec ta Mini-App !", t, c)
+            send_tg_message(f"✅ Thématique enregistrée : **{new_niche}** (synchronisée avec la Mini-App).", t, c)
         else:
-            send_tg_message("📌 Précise la niche, par exemple : `/niche Business & Entrepreneuriat`", t, c)
+            send_tg_message("📌 Précise la niche, par exemple : `/niche E-commerce & Vente en ligne`", t, c)
         return
 
     # 7. Commande /idees
     if text_clean.lower() in ["/idees", "/idées", "idées", "idees"]:
-        send_tg_message("🔍 Recherche d'idées percutantes adaptées à ton audience...", t, c)
-        reply = agent.chat_with_agent("Donne-moi 3 idées de publications captivantes pour aujourd'hui (1 actualité, 1 astuce pratique, 1 offre engageante).")
+        reply = agent.chat_with_agent("Donne 3 idées courtes et directes de publications pour aujourd'hui.")
         send_tg_message(reply, t, c)
         return
 
-    # 8. Discussion continue avec mémoire
+    # 8. Discussion continue et naturelle (Au fur et à mesure, SANS salutations répétitives)
     global CHAT_HISTORY
     CHAT_HISTORY.append({"role": "user", "content": text_clean})
+    
+    # Appel à Gemini avec la mémoire récente
     reply = agent.chat_with_agent(text_clean, history=CHAT_HISTORY)
-    CHAT_HISTORY.append({"role": "assistant", "content": reply})
-    if len(CHAT_HISTORY) > 14:
-        CHAT_HISTORY = CHAT_HISTORY[-12:]
-    send_tg_message(reply, t, c)
+    
+    # Nettoyage automatique des salutations intempestives
+    clean_reply = reply.strip()
+    for salutation in ["Bonjour Emmanuel !", "Bonjour Emmanuel,", "Bonjour Emmanuel", "Salut Emmanuel !", "Salut Emmanuel,", "Salut Emmanuel"]:
+        if clean_reply.startswith(salutation):
+            clean_reply = clean_reply[len(salutation):].strip()
+            
+    CHAT_HISTORY.append({"role": "assistant", "content": clean_reply})
+    if len(CHAT_HISTORY) > 12:
+        CHAT_HISTORY = CHAT_HISTORY[-10:]
+        
+    send_tg_message(clean_reply, t, c)
+
+def poll_once(token, chat_id, offset):
+    """Effectue un cycle d'écoute en agrégeant les messages consécutifs pour éviter le spam."""
+    url = f"https://api.telegram.org/bot{token}/getUpdates"
+    try:
+        params = {"offset": offset, "timeout": 15}
+        res = requests.get(url, params=params, timeout=25)
+        if res.status_code == 200:
+            data = res.json()
+            updates = data.get("result", [])
+            if not updates:
+                return offset
+                
+            # Nouveau offset pour acquitter immédiatement tous les messages
+            new_offset = updates[-1]["update_id"] + 1
+            
+            # Récupérer les messages adressés par Emmanuel
+            user_messages = []
+            for upd in updates:
+                upd_id = upd.get("update_id")
+                if upd_id in PROCESSED_UPDATE_IDS:
+                    continue
+                PROCESSED_UPDATE_IDS.add(upd_id)
+                
+                msg = upd.get("message", {})
+                cid = str(msg.get("chat", {}).get("id", ""))
+                txt = msg.get("text", "").strip()
+                if cid == str(chat_id) and txt:
+                    user_messages.append(txt)
+                    
+            # Si Emmanuel a envoyé plusieurs petits messages en quelques secondes, on les combine
+            if user_messages:
+                combined_text = " ".join(user_messages)
+                print(f"📩 Reçu d'Emmanuel : {combined_text}")
+                handle_telegram_message(combined_text, token, chat_id)
+                
+            return new_offset
+        elif res.status_code == 409:
+            time.sleep(8)
+            return offset
+    except Exception as e:
+        time.sleep(3)
+        return offset
+    return offset
 
 def start_polling_loop():
     token = TELEGRAM_BOT_TOKEN or os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -181,31 +228,22 @@ def start_polling_loop():
         print("Telegram bot token non configuré.")
         return
         
-    print("👂 Écouteur Telegram autonome actif...")
-    offset = 0
-    url = f"https://api.telegram.org/bot{token}/getUpdates"
+    print("👂 Écouteur Telegram démarré avec purge du backlog...")
     
+    # Purge des anciens messages pour ne pas balancer des tonnes de réponses au démarrage
+    offset = 0
+    try:
+        init_res = requests.get(f"https://api.telegram.org/bot{token}/getUpdates?offset=-1", timeout=10)
+        if init_res.status_code == 200:
+            res_list = init_res.json().get("result", [])
+            if res_list:
+                offset = res_list[-1]["update_id"] + 1
+                print(f"🧹 Backlog Telegram purgé, écoute à partir de l'update {offset}")
+    except Exception:
+        pass
+        
     while True:
-        try:
-            params = {"offset": offset, "timeout": 20}
-            res = requests.get(url, params=params, timeout=30)
-            if res.status_code == 200:
-                data = res.json()
-                for update in data.get("result", []):
-                    offset = update["update_id"] + 1
-                    msg = update.get("message", {})
-                    cid = str(msg.get("chat", {}).get("id", ""))
-                    text = msg.get("text", "")
-                    
-                    if cid == str(chat_id) and text:
-                        print(f"📩 Reçu d'Emmanuel : {text}")
-                        handle_telegram_message(text, token, chat_id)
-            elif res.status_code == 409:
-                time.sleep(8)
-            else:
-                time.sleep(3)
-        except Exception as e:
-            time.sleep(3)
+        offset = poll_once(token, chat_id, offset)
 
 if __name__ == "__main__":
     start_polling_loop()
