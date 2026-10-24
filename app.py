@@ -10,14 +10,18 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- INJECTION DES SECRETS STREAMLIT DANS L'ENVIRONNEMENT ---
+# --- GESTION DES SECRETS & NETTOYAGE ---
 def get_secret(key, default=""):
+    val = ""
     try:
         if hasattr(st, "secrets") and key in st.secrets:
-            return str(st.secrets[key])
+            val = str(st.secrets[key])
     except Exception:
         pass
-    return os.environ.get(key, default)
+    if not val:
+        val = os.environ.get(key, default)
+    # Nettoyage des espaces ou guillemets accidentels
+    return str(val).strip().replace('"', '').replace("'", "")
 
 APP_PASSWORD = get_secret("APP_PASSWORD", "kint2026")
 GEMINI_KEY = get_secret("GEMINI_API_KEY")
@@ -25,7 +29,7 @@ FB_TOKEN = get_secret("FB_PAGE_ACCESS_TOKEN")
 TG_TOKEN = get_secret("TELEGRAM_BOT_TOKEN")
 TG_CHAT_ID = get_secret("TELEGRAM_CHAT_ID")
 
-# --- SÉCURITÉ & AUTHENTIFICATION PRIVÉE ---
+# --- AUTHENTIFICATION PRIVÉE ---
 def check_password():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
@@ -49,7 +53,7 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- APPLICATION PRINCIPALE ---
+# --- CONFIGURATION ---
 CONFIG_FILE = "config.json"
 HISTORY_FILE = "history.txt"
 
@@ -81,26 +85,24 @@ with st.sidebar:
     
     if st.button("Envoyer un test sur mon Telegram", use_container_width=True):
         if not TG_TOKEN or not TG_CHAT_ID:
-            st.warning("⚠️ Les clés Telegram ne sont pas encore collées dans Streamlit Secrets (Manage app > Settings > Secrets).")
+            st.warning("⚠️ Clés Telegram manquantes.")
         else:
-            with st.spinner("Envoi direct du message..."):
+            with st.spinner("Connexion sécurisée à Telegram en cours..."):
                 url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
+                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+                payload = {
+                    "chat_id": TG_CHAT_ID,
+                    "text": "🔔 **BINGO !**\nTon application en ligne Streamlit est connectée avec succès à ton Telegram !",
+                    "parse_mode": "Markdown"
+                }
                 try:
-                    r = requests.post(
-                        url,
-                        json={
-                            "chat_id": TG_CHAT_ID,
-                            "text": "🔔 **BINGO !**\nTon application en ligne Streamlit est connectée avec succès à ton Telegram !",
-                            "parse_mode": "Markdown"
-                        },
-                        timeout=15
-                    )
+                    r = requests.post(url, headers=headers, json=payload, timeout=30)
                     if r.status_code == 200:
                         st.success("✅ Reçu sur ton Telegram ! Regarde ton téléphone !")
                     else:
-                        st.error(f"❌ Erreur Telegram ({r.status_code}) : {r.text}")
+                        st.error(f"❌ Réponse Telegram ({r.status_code}) : {r.text}")
                 except Exception as e:
-                    st.error(f"❌ Exception : {e}")
+                    st.error(f"❌ Erreur réseau : {e}")
                 
     st.divider()
     if st.button("Se déconnecter 🔒", use_container_width=True):
@@ -109,11 +111,6 @@ with st.sidebar:
 
 # CONTENU PRINCIPAL
 st.title("📊 Tableau de Bord - Publication Facebook & Telegram")
-
-# Vérification de l'état des clés
-secrets_ok = bool(GEMINI_KEY and FB_TOKEN and TG_TOKEN and TG_CHAT_ID)
-if not secrets_ok:
-    st.info("💡 **Astuce pour activer les boutons en ligne :** Clique en bas à droite sur `< Manage app` > les 3 points `⋮` > **Settings** > **Secrets** pour y coller tes clés (Facebook, Google, Telegram).")
 
 col1, col2, col3 = st.columns(3)
 with col1:
