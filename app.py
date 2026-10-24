@@ -2,12 +2,14 @@ import streamlit as st
 import json
 import os
 import requests
+import threading
 import io
 import agent
+import bot
 
 st.set_page_config(
     page_title="Mon Agence IA - Privée & Sécurisée",
-    page_icon="🔒",
+    page_icon="🤖",
     layout="wide"
 )
 
@@ -30,12 +32,24 @@ FB_TOKEN = get_secret("FB_PAGE_ACCESS_TOKEN")
 TG_TOKEN = get_secret("TELEGRAM_BOT_TOKEN")
 TG_CHAT_ID = get_secret("TELEGRAM_CHAT_ID")
 
-# Injection dans le module agent
+# Injection dans les modules
 agent.GEMINI_API_KEY = GEMINI_KEY
 agent.FB_PAGE_ID = FB_PAGE_ID
 agent.FB_PAGE_ACCESS_TOKEN = FB_TOKEN
 agent.TELEGRAM_BOT_TOKEN = TG_TOKEN
 agent.TELEGRAM_CHAT_ID = TG_CHAT_ID
+
+bot.GEMINI_API_KEY = GEMINI_KEY
+bot.FB_PAGE_ID = FB_PAGE_ID
+bot.FB_PAGE_ACCESS_TOKEN = FB_TOKEN
+bot.TELEGRAM_BOT_TOKEN = TG_TOKEN
+bot.TELEGRAM_CHAT_ID = TG_CHAT_ID
+
+# Démarrage de l'écouteur Telegram en tâche de fond (une seule fois)
+if TG_TOKEN and "bot_started" not in st.session_state:
+    st.session_state.bot_started = True
+    t = threading.Thread(target=bot.start_polling_loop, daemon=True)
+    t.start()
 
 # --- AUTHENTIFICATION PRIVÉE ---
 def check_password():
@@ -91,10 +105,10 @@ config = load_config()
 with st.sidebar:
     st.title("🤖 Mon Agence IA")
     st.success("🟢 Connecté : Emmanuel Kint")
+    st.info("👂 Écouteur Telegram : Actif 24h/24")
     
     st.divider()
     st.subheader("🔔 Test Direct Telegram")
-    
     if st.button("Envoyer un test sur mon Telegram", use_container_width=True):
         if not TG_TOKEN or not TG_CHAT_ID:
             st.warning("⚠️ Clés Telegram non configurées.")
@@ -136,9 +150,41 @@ with col3:
 
 st.divider()
 
-tab1, tab2, tab3 = st.tabs(["🎯 Définir Niche & Horaires", "⚡ Publier Maintenant", "📜 Historique"])
+# ONGLETS D'ACTIONS
+tab1, tab2, tab3, tab4 = st.tabs([
+    "💬 Discuter avec mon Agent",
+    "🎯 Définir Niche & Horaires",
+    "⚡ Publier Maintenant",
+    "📜 Historique"
+])
 
+# --- TAB 1 : CHAT EN DIRECT AVEC L'AGENT ---
 with tab1:
+    st.subheader("💬 Parle directement à ton Community Manager IA")
+    st.caption("Demande-lui des idées de posts, fais-lui rédiger des contenus sur-mesure, ou pose-lui n'importe quelle question stratégique.")
+    
+    if "messages" not in st.session_state:
+        st.session_state.messages = [
+            {"role": "assistant", "content": "👋 Bonjour Emmanuel ! Que souhaites-tu publier ou créer pour ta page Facebook aujourd'hui ? Tu peux me demander des idées de sujets, un texte sur-mesure ou me donner des consignes !"}
+        ]
+        
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            
+    if prompt_input := st.chat_input("Écris ton message à ton agent ici..."):
+        st.session_state.messages.append({"role": "user", "content": prompt_input})
+        with st.chat_message("user"):
+            st.markdown(prompt_input)
+            
+        with st.chat_message("assistant"):
+            with st.spinner("🤖 Ton agent réfléchit..."):
+                reply = bot.chat_with_gemini(prompt_input)
+                st.markdown(reply)
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+
+# --- TAB 2 : NICHES & HORAIRES ---
+with tab2:
     st.subheader("1. Thématique et Niche de travail")
     
     niches_predefinies = [
@@ -203,7 +249,8 @@ with tab1:
         st.success(f"✅ Enregistré ! Thématique : **{final_niche}** | Heure choisie : **{chosen_time}** ({chosen_freq})")
         st.rerun()
 
-with tab2:
+# --- TAB 3 : PUBLICATION IMMÉDIATE ---
+with tab3:
     st.subheader("Publication Instantanée en Direct")
     st.write("Ce bouton lance l'agent en direct sous tes yeux : recherche de tendance, rédaction Gemini, image FLUX, publication Facebook et envoi Telegram.")
     
@@ -249,7 +296,8 @@ with tab2:
         except Exception as e:
             status_box.error(f"Erreur : {e}")
 
-with tab3:
+# --- TAB 4 : HISTORIQUE ---
+with tab4:
     st.subheader("Historique des publications")
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
