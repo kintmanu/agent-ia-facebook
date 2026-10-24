@@ -12,16 +12,30 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 FB_PAGE_ACCESS_TOKEN = os.environ.get("FB_PAGE_ACCESS_TOKEN")
 FB_PAGE_ID = os.environ.get("FB_PAGE_ID", "61578925910517")
 
-# Mémoire de travail
+# Mémoire de travail et anti-doublon
 PENDING_DRAFT = {}
 CHAT_HISTORY = []
 PROCESSED_UPDATE_IDS = set()
+LAST_HANDLED_MESSAGES = {}
+LAST_SENT_TEXT = ""
+LAST_SENT_TIME = 0
 
 def send_tg_message(text, token=None, chat_id=None):
+    global LAST_SENT_TEXT, LAST_SENT_TIME
+    now = time.time()
     t = token or TELEGRAM_BOT_TOKEN
     c = chat_id or TELEGRAM_CHAT_ID
     if not t or not c:
         return
+        
+    clean_txt = text.strip()
+    # Anti-doublon absolu à l'envoi : bloque l'envoi du même message dans les 6 secondes
+    if clean_txt == LAST_SENT_TEXT and (now - LAST_SENT_TIME) < 6:
+        print(f"⚠️ Envoi Telegram doublon bloqué : '{clean_txt[:30]}...'")
+        return
+    LAST_SENT_TEXT = clean_txt
+    LAST_SENT_TIME = now
+
     url = f"https://api.telegram.org/bot{t}/sendMessage"
     payload = {"chat_id": c, "text": text, "parse_mode": "Markdown"}
     try:
@@ -43,11 +57,27 @@ def send_tg_photo(caption, image_bytes, token=None, chat_id=None):
         print(f"Erreur envoi photo TG: {e}")
 
 def handle_telegram_message(text, token=None, chat_id=None):
+    global LAST_HANDLED_MESSAGES
+    now = time.time()
     t = token or TELEGRAM_BOT_TOKEN
     c = chat_id or TELEGRAM_CHAT_ID
     text_clean = text.strip()
+    
+    # 0. Anti-doublon absolu à la réception (ignore tout message identique reçu dans les 8 secondes)
+    dedup_key = f"{c}:{text_clean.lower()}"
+    if dedup_key in LAST_HANDLED_MESSAGES and (now - LAST_HANDLED_MESSAGES[dedup_key]) < 8:
+        print(f"⚠️ Message reçu doublon ignoré : '{text_clean}'")
+        return
+    LAST_HANDLED_MESSAGES[dedup_key] = now
+
     config = agent.load_config()
     camp_status = agent.get_campaign_status(config)
+
+    # Réponse directe et énergique aux salutations amicales courantes
+    greetings = ["comment tu vas", "comment vas tu", "comment ca va", "comment ça va", "ca va", "ça va", "salut", "bonjour", "yo", "hello", "coucou", "cv", "slt"]
+    if text_clean.lower() in greetings:
+        send_tg_message("En pleine forme ! Prêt à faire rayonner ta page Facebook. De quoi as-tu besoin : publier une actu ou lancer une pub ?", t, c)
+        return
 
     # 1. Commande Menu / Aide
     if text_clean.lower() in ["/start", "aide", "help", "menu"]:
