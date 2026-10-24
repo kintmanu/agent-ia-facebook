@@ -10,6 +10,14 @@ st.set_page_config(
     layout="wide"
 )
 
+# Injection des secrets Streamlit dans l'environnement pour agent.py
+try:
+    if hasattr(st, "secrets"):
+        for k, v in st.secrets.items():
+            os.environ[k] = str(v)
+except Exception:
+    pass
+
 # --- SÉCURITÉ & AUTHENTIFICATION PRIVÉE ---
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "kint2026")
 
@@ -129,10 +137,19 @@ with tab1:
         value=config.get("keywords", "intelligence artificielle IA")
     )
     
+    tone_options = [
+        "Simple et vulgarisé",
+        "Professionnel et engageant",
+        "Humoristique et percutant",
+        "Analytique et expert"
+    ]
+    saved_tone = config.get("tone", tone_options[1])
+    current_tone = saved_tone if saved_tone in tone_options else tone_options[1]
+    
     tone = st.select_slider(
         "Style d'écriture :",
-        options=["Simple et vulgarisé", "Professionnel et engageant", "Humoristique et percutant", "Analytique et expert"],
-        value=config.get("tone", "Professionnel et engageant")
+        options=tone_options,
+        value=current_tone
     )
     
     if st.button("💾 Sauvegarder et Synchroniser", type="primary"):
