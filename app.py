@@ -10,24 +10,29 @@ st.set_page_config(
     layout="wide"
 )
 
-# Injection des secrets Streamlit dans l'environnement pour agent.py
-try:
-    if hasattr(st, "secrets"):
-        for k, v in st.secrets.items():
-            os.environ[k] = str(v)
-except Exception:
-    pass
+# --- INJECTION DES SECRETS STREAMLIT DANS L'ENVIRONNEMENT ---
+def get_secret(key, default=""):
+    try:
+        if hasattr(st, "secrets") and key in st.secrets:
+            return str(st.secrets[key])
+    except Exception:
+        pass
+    return os.environ.get(key, default)
+
+APP_PASSWORD = get_secret("APP_PASSWORD", "kint2026")
+GEMINI_KEY = get_secret("GEMINI_API_KEY")
+FB_TOKEN = get_secret("FB_PAGE_ACCESS_TOKEN")
+TG_TOKEN = get_secret("TELEGRAM_BOT_TOKEN")
+TG_CHAT_ID = get_secret("TELEGRAM_CHAT_ID")
 
 # --- SÉCURITÉ & AUTHENTIFICATION PRIVÉE ---
-APP_PASSWORD = os.environ.get("APP_PASSWORD", "kint2026")
-
 def check_password():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
         
     if not st.session_state.authenticated:
         st.markdown("<h2 style='text-align: center;'>🔒 Espace Privé - Emmanuel Kint</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: gray;'>Cette application est privée. Veuillez entrer votre mot de passe pour accéder au tableau de bord.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: gray;'>Veuillez entrer votre mot de passe pour accéder au tableau de bord.</p>", unsafe_allow_html=True)
         
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
@@ -44,7 +49,7 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- APPLICATION PRINCIPALE (ACCÈS AUTORISÉ) ---
+# --- APPLICATION PRINCIPALE ---
 CONFIG_FILE = "config.json"
 HISTORY_FILE = "history.txt"
 
@@ -52,7 +57,7 @@ def load_config():
     default_config = {
         "niche": "Intelligence Artificielle & Outils Tech",
         "keywords": "intelligence artificielle IA",
-        "tone": "Professionnel, captivant et vulgarisé"
+        "tone": "Professionnel et engageant"
     }
     if os.path.exists(CONFIG_FILE):
         try:
@@ -65,36 +70,50 @@ def load_config():
 def save_config(cfg):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2, ensure_ascii=False)
-    try:
-        subprocess.run(["git", "add", "config.json"], check=False)
-        subprocess.run(["git", "commit", "-m", "Mise a jour niche depuis dashboard"], check=False)
-        subprocess.run(["git", "push", "origin", "main"], check=False)
-    except Exception:
-        pass
 
 # BARRE LATÉRALE
 with st.sidebar:
     st.title("🤖 Mon Agence IA")
     st.success("🟢 Connecté : Emmanuel Kint")
-    st.caption("Application 100% en ligne et sécurisée.")
     
     st.divider()
-    st.subheader("🔔 Test Rapide Telegram")
-    if st.button("Envoyer un test sur mon Telegram"):
-        with st.spinner("Envoi du test..."):
-            res = subprocess.run(["python", "agent.py", "--test-telegram"], capture_output=True, text=True)
-            if "succès" in res.stdout:
-                st.success("✅ Reçu sur ton Telegram !")
-            else:
-                st.info(res.stdout)
+    st.subheader("🔔 Test Direct Telegram")
+    
+    if st.button("Envoyer un test sur mon Telegram", use_container_width=True):
+        if not TG_TOKEN or not TG_CHAT_ID:
+            st.warning("⚠️ Les clés Telegram ne sont pas encore collées dans Streamlit Secrets (Manage app > Settings > Secrets).")
+        else:
+            with st.spinner("Envoi direct du message..."):
+                url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
+                try:
+                    r = requests.post(
+                        url,
+                        json={
+                            "chat_id": TG_CHAT_ID,
+                            "text": "🔔 **BINGO !**\nTon application en ligne Streamlit est connectée avec succès à ton Telegram !",
+                            "parse_mode": "Markdown"
+                        },
+                        timeout=15
+                    )
+                    if r.status_code == 200:
+                        st.success("✅ Reçu sur ton Telegram ! Regarde ton téléphone !")
+                    else:
+                        st.error(f"❌ Erreur Telegram ({r.status_code}) : {r.text}")
+                except Exception as e:
+                    st.error(f"❌ Exception : {e}")
                 
     st.divider()
-    if st.button("Se déconnecter 🔒"):
+    if st.button("Se déconnecter 🔒", use_container_width=True):
         st.session_state.authenticated = False
         st.rerun()
 
 # CONTENU PRINCIPAL
 st.title("📊 Tableau de Bord - Publication Facebook & Telegram")
+
+# Vérification de l'état des clés
+secrets_ok = bool(GEMINI_KEY and FB_TOKEN and TG_TOKEN and TG_CHAT_ID)
+if not secrets_ok:
+    st.info("💡 **Astuce pour activer les boutons en ligne :** Clique en bas à droite sur `< Manage app` > les 3 points `⋮` > **Settings** > **Secrets** pour y coller tes clés (Facebook, Google, Telegram).")
 
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -124,7 +143,7 @@ with tab1:
     ]
     
     current_niche = config.get("niche", niches_predefinies[0])
-    idx = niches_predefinies.index(current_niche) if current_niche in niches_predefinies else 6
+    idx = niches_predefinies.index(current_niche) if current_niche in niches_predefinies else 0
     
     chosen = st.selectbox("Thématique principale :", niches_predefinies, index=idx)
     if chosen == "Autre (Personnalisée)":
@@ -146,13 +165,9 @@ with tab1:
     saved_tone = config.get("tone", tone_options[1])
     current_tone = saved_tone if saved_tone in tone_options else tone_options[1]
     
-    tone = st.select_slider(
-        "Style d'écriture :",
-        options=tone_options,
-        value=current_tone
-    )
+    tone = st.select_slider("Style d'écriture :", options=tone_options, value=current_tone)
     
-    if st.button("💾 Sauvegarder et Synchroniser", type="primary"):
+    if st.button("💾 Sauvegarder et Synchroniser la Niche", type="primary"):
         new_cfg = {"niche": final_niche, "keywords": keywords, "tone": tone}
         save_config(new_cfg)
         st.success(f"✅ Niche enregistrée : **{final_niche}** ! Tous les prochains posts cibleront ce sujet.")
@@ -162,8 +177,16 @@ with tab2:
     st.write("Ce bouton force l'agent à rédiger un article sur la niche active, à créer la photo et à publier sur Facebook **tout en t'envoyant le rapport complet sur Telegram**.")
     
     if st.button("🚀 Forcer la publication immédiate", type="primary"):
+        env = dict(os.environ)
+        if hasattr(st, "secrets"):
+            try:
+                for k, v in st.secrets.items():
+                    env[k] = str(v)
+            except Exception:
+                pass
+                
         with st.spinner("🤖 Recherche des tendances, rédaction Gemini, image FLUX et publication Facebook en cours..."):
-            res = subprocess.run(["python", "agent.py", "--force"], capture_output=True, text=True, timeout=120)
+            res = subprocess.run(["python", "agent.py", "--force"], env=env, capture_output=True, text=True, timeout=120)
             st.code(res.stdout)
             if "SUCCÈS TOTAL" in res.stdout:
                 st.balloons()
