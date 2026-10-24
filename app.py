@@ -227,7 +227,7 @@ with tab2:
                 st.stop()
                 
             status_box.write("🚀 4. Publication officielle sur la page Facebook 'Emmanuel kint'...")
-            fb_ok = agent.publish_to_facebook(content["post_text"], image_data)
+            fb_ok, fb_detail = agent.publish_to_facebook(content["post_text"], image_data)
             
             if fb_ok:
                 status_box.write("📲 5. Envoi du rapport en direct sur ton Telegram...")
@@ -244,7 +244,7 @@ with tab2:
                     st.markdown(content["post_text"])
                     st.markdown("[👉 Ouvrir le post sur Facebook](https://www.facebook.com/profile.php?id=61578925910517)")
             else:
-                status_box.error("Erreur lors de la publication Facebook.")
+                status_box.error(f"❌ Détail de l'erreur Facebook : {fb_detail}")
                 
         except Exception as e:
             status_box.error(f"Erreur : {e}")

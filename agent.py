@@ -206,10 +206,11 @@ def publish_to_facebook(text, image_bytes):
     res = requests.post(url, data=data, files=files, timeout=40)
     if res.status_code == 200:
         print("✅ SUCCÈS TOTAL ! Publié sur ta page Facebook !")
-        return True
+        return True, "Publication réussie !"
     else:
-        print(f"❌ Erreur Facebook : {res.text}")
-        return False
+        err = res.text
+        print(f"❌ Erreur Facebook : {err}")
+        return False, err
 
 # 6. Le Messager : Envoi du rapport instantané sur Telegram
 def send_telegram_report(text, image_bytes, niche):
