@@ -546,54 +546,60 @@ with tab_schedule:
         col_prog_opt1, col_prog_opt2 = st.columns([2, 1])
         with col_prog_opt1:
             quantite_prog = st.selectbox(
-                "Nombre de publications à pré-programmer sur Facebook :",
+                "Combien de publications pré-programmer sur Facebook :",
                 [
-                    f"🚀 Toutes les publications à venir de la campagne ({tot_posts} posts)",
-                    "⚡ Les 3 prochains créneaux (Aujourd'hui & Demain)",
-                    "📦 Les 6 prochains créneaux (2 prochains jours)"
-                ]
+                    "⚡ Les 3 prochains créneaux (Recommandé - Ultra rapide ~15s)",
+                    "📦 Les 6 prochains créneaux (2 prochains jours ~30s)",
+                    f"🚀 Toutes les publications de la campagne ({tot_posts} posts - 1 à 2 min)"
+                ],
+                index=0
             )
         with col_prog_opt2:
             st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
             pub_now_clicked = st.button("⚡ Publier un post tout de suite", help="Publie immédiatement un post pour le créneau d'aujourd'hui sans attendre", use_container_width=True)
 
         if pub_now_clicked:
-            with st.spinner("🤖 Rédaction et publication immédiate sur Facebook..."):
-                try:
-                    if "Publicités" in chosen_strat:
-                        is_ad_now = True
-                    elif "Mixte" in chosen_strat:
-                        is_ad_now = (datetime.datetime.now().hour >= 12)
-                    else:
-                        is_ad_now = False
-
-                    if is_ad_now:
-                        ad_data = agent.generate_ad_post(
-                            product_name=off_sujet,
-                            offer_details=off_sujet,
-                            cta="Écrivez-moi en message privé pour en profiter",
-                            audience="Entrepreneurs et professionnels",
-                            config=config
-                        )
-                        p_text = ad_data.get("post_text", "")
-                        p_img = agent.get_stock_photo(off_sujet) or agent.download_image(f"photo {off_sujet}")
-                    else:
-                        arts = agent.fetch_ai_news(config, force=True) or [{"title": f"Dernières tendances {config.get('niche', 'IA')}", "link": "https://news.google.com"}]
-                        n_data = agent.generate_post(arts, config)
-                        p_text = n_data.get("post_text", "")
-                        p_img = agent.get_stock_photo(config.get("niche", "Tech")) or agent.download_image("photo technology")
-
-                    if p_img:
-                        ok_pub, msg_pub = agent.publish_to_facebook(p_text, p_img)
-                        if ok_pub:
-                            st.success("🎉 **PUBLICATION IMMÉDIATE RÉUSSIE SUR FACEBOOK !**")
-                            st.markdown("[👉 Ouvrir ma Page Facebook](https://www.facebook.com/profile.php?id=61578925910517)")
+            ok_tok, msg_tok = agent.test_facebook_token()
+            if not ok_tok:
+                st.error(f"❌ Impossible de publier : problème de connexion Facebook ({msg_tok}).")
+                st.warning("👉 Votre jeton Facebook est expiré ou invalide. Mettez-le à jour dans la barre latérale gauche (🔑 Jeton de Page Facebook).")
+            else:
+                with st.spinner("🤖 Rédaction et publication immédiate sur Facebook..."):
+                    try:
+                        if "Publicités" in chosen_strat:
+                            is_ad_now = True
+                        elif "Mixte" in chosen_strat:
+                            is_ad_now = (datetime.datetime.now().hour >= 12)
                         else:
-                            st.error(f"❌ Erreur Facebook : {msg_pub}")
-                    else:
-                        st.error("Impossible de générer le visuel.")
-                except Exception as e_pub:
-                    st.error(f"Erreur : {e_pub}")
+                            is_ad_now = False
+
+                        if is_ad_now:
+                            ad_data = agent.generate_ad_post(
+                                product_name=off_sujet,
+                                offer_details=off_sujet,
+                                cta="Écrivez-moi en message privé pour en profiter",
+                                audience="Entrepreneurs et professionnels",
+                                config=config
+                            )
+                            p_text = ad_data.get("post_text", "")
+                            p_img = agent.get_stock_photo(off_sujet) or agent.download_image(f"photo {off_sujet}")
+                        else:
+                            arts = agent.fetch_ai_news(config, force=True) or [{"title": f"Dernières tendances {config.get('niche', 'IA')}", "link": "https://news.google.com"}]
+                            n_data = agent.generate_post(arts, config)
+                            p_text = n_data.get("post_text", "")
+                            p_img = agent.get_stock_photo(config.get("niche", "Tech")) or agent.download_image("photo technology")
+
+                        if p_img:
+                            ok_pub, msg_pub = agent.publish_to_facebook(p_text, p_img)
+                            if ok_pub:
+                                st.success("🎉 **PUBLICATION IMMÉDIATE RÉUSSIE SUR FACEBOOK !**")
+                                st.markdown("[👉 Ouvrir ma Page Facebook](https://www.facebook.com/profile.php?id=61578925910517)")
+                            else:
+                                st.error(f"❌ Erreur Facebook : {msg_pub}")
+                        else:
+                            st.error("Impossible de générer le visuel.")
+                    except Exception as e_pub:
+                        st.error(f"Erreur : {e_pub}")
 
         btn_col_a, btn_col_b = st.columns([2, 1])
         with btn_col_a:
@@ -624,18 +630,37 @@ with tab_schedule:
             bot.send_tg_message(f"Réglages de campagne enregistrés : {total_j} jours, {tot_posts} posts prévus.")
 
         if launch_camp_btn:
-            limit_p = None
-            if "3 prochains" in quantite_prog:
-                limit_p = 3
+            limit_p = 3
+            if "Toutes" in quantite_prog:
+                limit_p = None
             elif "6 prochains" in quantite_prog:
                 limit_p = 6
+            elif "3 prochains" in quantite_prog:
+                limit_p = 3
+
+            # Vérification préalable du jeton Facebook (< 1 sec)
+            ok_tok, msg_tok = agent.test_facebook_token()
+            if not ok_tok:
+                st.error("❌ **Impossible de lancer la programmation : problème de connexion Facebook.**")
+                st.error(f"Détail retourné par Facebook : {msg_tok}")
+                st.warning("👉 Votre jeton Facebook est invalide ou a expiré. Veuillez coller votre nouveau jeton dans le panneau de gauche (🔑 Jeton de Page Facebook) puis cliquez sur 'Enregistrer & Tester'.")
+                st.stop()
 
             prog_bar = st.progress(0.0)
             status_box = st.empty()
+            live_table_holder = st.empty()
 
-            def on_progress(cur, total, msg):
-                prog_bar.progress(cur / total)
+            live_rows = []
+            def on_progress(cur, total, msg, item=None):
+                if total > 0:
+                    prog_bar.progress(min(cur / total, 1.0))
                 status_box.info(f"⏳ **Progression : {cur}/{total}** - {msg}")
+                if item:
+                    live_rows.append(item)
+                    import pandas as pd
+                    df_live = pd.DataFrame(live_rows)
+                    df_live.columns = ["Date & Heure", "Créneau", "Type de Contenu", "Statut sur Facebook"]
+                    live_table_holder.dataframe(df_live, use_container_width=True)
 
             with st.spinner("🤖 Préparation des publications et envoi à Facebook..."):
                 ok_sched, res_sched = agent.schedule_campaign_on_facebook(config, max_posts=limit_p, progress_callback=on_progress)
@@ -646,17 +671,10 @@ with tab_schedule:
                     status_box.empty()
                     st.success(f"🎉 **{nb_ok} publication(s) ont été officiellement programmées sur Facebook !**")
                     st.info("📅 Toutes ces publications sont enregistrées dans votre calendrier **Meta Business Suite**. Facebook les publiera automatiquement aux dates et heures prévues !")
-
-                    # Tableau récapitulatif
-                    import pandas as pd
-                    df_sched = pd.DataFrame(res_sched)
-                    df_sched.columns = ["Date & Heure", "Créneau", "Type de Contenu", "Statut sur Facebook"]
-                    st.dataframe(df_sched, use_container_width=True)
-
-                    # Notification Telegram
                     bot.send_tg_message(f"🎉 Campagne Facebook : {nb_ok} publications programmées sur Meta Business Suite !")
                 else:
-                    st.warning(f"⚠️ {res_sched}")
+                    status_box.empty()
+                    st.error(f"❌ {res_sched}")
 
         st.markdown("<br>", unsafe_allow_html=True)
         with st.expander("📅 Vérifier les publications programmées en direct sur Meta Facebook", expanded=False):

@@ -789,8 +789,13 @@ def test_gemini_key(key_to_test=None):
 def schedule_campaign_on_facebook(config, max_posts=None, progress_callback=None):
     """
     Génère et programme nativement sur les serveurs Meta/Facebook
-    toutes les publications futures de la campagne.
+    les publications de la campagne de manière rapide et sécurisée.
     """
+    # 1. Vérification préalable immédiate du jeton Facebook (< 1 sec)
+    ok_tok, msg_tok = test_facebook_token()
+    if not ok_tok:
+        return False, f"Impossible de programmer : votre jeton Facebook est invalide ou expiré ({msg_tok}). Veuillez le renouveler dans la barre latérale gauche."
+
     slots = config.get("schedule_slots", {})
     active_slots = [(k, v) for k, v in slots.items() if v.get("enabled")]
     if not active_slots:
@@ -835,6 +840,16 @@ def schedule_campaign_on_facebook(config, max_posts=None, progress_callback=None
     total_to_schedule = len(future_slots)
     results = []
 
+    # Pré-récupération des actualités en 1 seule requête (gain de temps considérable)
+    articles = []
+    if "Actualités" in content_type or "Mixte" in content_type:
+        try:
+            articles = fetch_ai_news(config, force=True)
+        except Exception:
+            articles = []
+        if not articles:
+            articles = [{"title": f"Dernières avancées en {niche}", "link": "https://news.google.com"}]
+
     for idx, (s_key, s_label, s_dt) in enumerate(future_slots):
         is_ad = False
         if "Publicités" in content_type and "Actualités" not in content_type:
@@ -846,7 +861,7 @@ def schedule_campaign_on_facebook(config, max_posts=None, progress_callback=None
 
         slot_desc = f"{s_label} du {s_dt.strftime('%d/%m à %H:%M')}"
         if progress_callback:
-            progress_callback(idx + 1, total_to_schedule, f"Post {idx+1}/{total_to_schedule} ({slot_desc}) : Rédaction & photo...")
+            progress_callback(idx, total_to_schedule, f"Post {idx+1}/{total_to_schedule} ({slot_desc}) : Rédaction & photo...")
 
         try:
             post_text = ""
@@ -865,12 +880,8 @@ def schedule_campaign_on_facebook(config, max_posts=None, progress_callback=None
                     post_text = str(ad_data)
                 topic_img = ad_topic
             else:
-                articles = fetch_ai_news(config, force=True)
-                if articles:
-                    art = articles[idx % len(articles)]
-                    news_data = generate_post([art], config)
-                else:
-                    news_data = generate_post([{"title": f"Dernières tendances en {niche}", "link": "https://news.google.com"}], config)
+                art = articles[idx % len(articles)]
+                news_data = generate_post([art], config)
                 if isinstance(news_data, dict):
                     post_text = news_data.get("post_text", "")
                 else:
@@ -878,45 +889,65 @@ def schedule_campaign_on_facebook(config, max_posts=None, progress_callback=None
                 topic_img = niche
 
             if not post_text:
-                post_text = f"🚀 Retrouvez toutes les nouveautés et opportunités en {niche} !\n\nContactez Emmanuel Kint pour échanger.\n\n#IA #Innovation #EmmanuelKint"
+                post_text = f"""🚀 Retrouvez toutes les opportunités et innovations en {niche} !
 
-            # Sélection photo Unsplash HD
-            img_bytes = get_stock_photo(topic_img) or download_image(f"modern clean professional photo {topic_img}")
+Contactez Emmanuel Kint pour plus d'informations.
+
+#IA #Innovation #EmmanuelKint"""
+
+            # Sélection photo Unsplash HD (ultra rapide)
+            img_bytes = get_stock_photo(topic_img) or download_image(f"modern clean photo {topic_img}")
             if not img_bytes:
-                results.append({
+                item_err = {
                     "date": s_dt.strftime("%d/%m/%Y à %H:%M"),
                     "slot": s_label,
                     "type": "Publicité" if is_ad else "Actualité",
                     "status": "❌ Erreur visuel"
-                })
+                }
+                results.append(item_err)
+                if progress_callback:
+                    progress_callback(idx + 1, total_to_schedule, f"Erreur image pour {slot_desc}", item_err)
                 continue
 
             ts = int(s_dt.timestamp())
             ok, msg = publish_to_facebook(post_text, img_bytes, scheduled_time=ts)
             dt_formatted = s_dt.strftime("%d/%m/%Y à %H:%M")
             if ok:
-                results.append({
+                item_res = {
                     "date": dt_formatted,
                     "slot": s_label,
                     "type": "Publicité" if is_ad else "Actualité",
                     "status": "✅ Programmé sur Facebook"
-                })
+                }
             else:
-                results.append({
+                item_res = {
                     "date": dt_formatted,
                     "slot": s_label,
                     "type": "Publicité" if is_ad else "Actualité",
                     "status": f"❌ Erreur: {msg}"
-                })
-            
-            time.sleep(2)
+                }
+                # Si erreur d'authentification Facebook, on arrête immédiatement la boucle
+                if "Session has expired" in msg or "OAuthException" in msg:
+                    results.append(item_res)
+                    if progress_callback:
+                        progress_callback(idx + 1, total_to_schedule, "Jeton Facebook expiré ! Arrêt de la campagne.", item_res)
+                    return False, f"Arrêt de la programmation : Votre jeton Facebook est expiré ({msg}). Veuillez le renouveler dans la barre latérale."
+
+            results.append(item_res)
+            if progress_callback:
+                progress_callback(idx + 1, total_to_schedule, f"{item_res['status']} ({slot_desc})", item_res)
+
+            time.sleep(1)
         except Exception as e:
-            results.append({
+            item_exc = {
                 "date": s_dt.strftime("%d/%m/%Y à %H:%M"),
                 "slot": s_label,
                 "type": "Publicité" if is_ad else "Actualité",
-                "status": f"❌ Erreur : {e}"
-            })
+                "status": f"❌ Erreur: {e}"
+            }
+            results.append(item_exc)
+            if progress_callback:
+                progress_callback(idx + 1, total_to_schedule, f"Erreur : {e}", item_exc)
 
     return True, results
 
