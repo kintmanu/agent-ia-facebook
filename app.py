@@ -24,6 +24,11 @@ except Exception:
     pass
 
 
+def parse_json_safely(raw_text, default_key="post_text"):
+    if hasattr(agent, "parse_json_safely"):
+        return agent.parse_json_safely(raw_text, default_key=default_key)
+    return {default_key: str(raw_text)}
+
 def get_photo_safely(topic):
     if hasattr(agent, "get_stock_photo"):
         res = getattr(agent, "get_stock_photo")(topic)

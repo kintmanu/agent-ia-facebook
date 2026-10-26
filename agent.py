@@ -274,6 +274,27 @@ def fetch_ai_news(config, force=False):
 
     return fresh_articles
 
+def parse_json_safely(raw_text, default_key="post_text"):
+    """Parse le JSON renvoyé par Gemini de manière 100% robuste avec extracteur regex."""
+    if not raw_text:
+        return {default_key: "", "image_prompt": "modern clean photography", "headline": "Publication"}
+    clean = str(raw_text).strip().replace("```json", "").replace("```", "").strip()
+    try:
+        return json.loads(clean)
+    except Exception:
+        pass
+    try:
+        match = re.search(r'\{.*\}', str(raw_text), re.DOTALL)
+        if match:
+            return json.loads(match.group(0))
+    except Exception:
+        pass
+    return {
+        default_key: clean,
+        "image_prompt": "professional modern clean business photography, 8k",
+        "headline": "Publication"
+    }
+
 # 4. Rédacteur de post d'actualité / tendance
 def generate_post(articles, config):
     articles_text = "\n".join([f"- {a['title']} (Lien: {a['link']})" for a in articles])
