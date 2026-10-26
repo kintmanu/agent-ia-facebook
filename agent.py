@@ -367,66 +367,83 @@ Règles :
 
 # --- CATALOGUE DE VRAIES PHOTOS PROFESSIONNELLES LIBRES DE DROITS (UNSPLASH HD 1080x1080) ---
 UNSPLASH_CATALOG = {
-    "formation": [
-        "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1080&h=1080&fit=crop", # Classe moderne & apprentissage
-        "https://images.unsplash.com/photo-1531482615713-2afd69097998?w=1080&h=1080&fit=crop", # Présentation tech & formation
-        "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1080&h=1080&fit=crop", # Étudiant concentré sur laptop
-        "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1080&h=1080&fit=crop", # Travail d'équipe en formation
-        "https://images.unsplash.com/photo-1577495508048-b635879837f1?w=1080&h=1080&fit=crop", # Session de travail moderne
+    "whatsapp_mobile": [
+        "https://images.unsplash.com/photo-1577563908411-5077b6dc7624?w=1080&h=1080&fit=crop", # Échange de messages sur smartphone moderne
+        "https://images.unsplash.com/photo-1534536281715-e28d76689b4d?w=1080&h=1080&fit=crop", # Communication professionnelle & contact
+        "https://images.unsplash.com/photo-1512428559087-560fa5ceab42?w=1080&h=1080&fit=crop", # Client consultant son mobile
+        "https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1080&h=1080&fit=crop", # Paiement & validation sur smartphone
     ],
-    "ia_tech": [
-        "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1080&h=1080&fit=crop", # Circuit imprimé haute technologie
-        "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&h=1080&fit=crop", # Ondes abstraites modernes
-        "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1080&h=1080&fit=crop", # Écran de programmation
-        "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=1080&h=1080&fit=crop", # Data center & cybersécurité
-        "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=1080&h=1080&fit=crop", # Technologie digitale
-        "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1080&h=1080&fit=crop", # Robotique blanche épurée
+    "sales_growth": [
+        "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1080&h=1080&fit=crop", # Graphiques de croissance des ventes
+        "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=1080&h=1080&fit=crop", # Entrepreneure dynamique sur laptop
+        "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=1080&h=1080&fit=crop", # Professionnel confiant en pleine réussite
+        "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1080&h=1080&fit=crop", # Accord commercial & partenariat réussi
     ],
-    "business": [
-        "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1080&h=1080&fit=crop", # Poignée de main accord business
-        "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=1080&h=1080&fit=crop", # Entrepreneur professionnel confiant
-        "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=1080&h=1080&fit=crop", # Femme d'affaires sur ordinateur
-        "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1080&h=1080&fit=crop", # Équipe en coworking
-        "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1080&h=1080&fit=crop", # Gratte-ciels modernes en verre
+    "ai_tech": [
+        "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&h=1080&fit=crop", # Ondes technologiques épurées & IA
+        "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1080&h=1080&fit=crop", # Robot blanc moderne futuriste
+        "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1080&h=1080&fit=crop", # Circuit haute précision & innovation
+        "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1080&h=1080&fit=crop", # Code & automatisation digitale
+        "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=1080&h=1080&fit=crop", # Infrastructure serveur & data sécurisée
     ],
-    "marketing": [
-        "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1080&h=1080&fit=crop", # Graphiques de croissance & analytics
-        "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=1080&h=1080&fit=crop", # Marketing sur smartphone
-        "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1080&h=1080&fit=crop", # Réunion stratégique
+    "training_coaching": [
+        "https://images.unsplash.com/photo-1531482615713-2afd69097998?w=1080&h=1080&fit=crop", # Atelier tech & montée en compétences
+        "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1080&h=1080&fit=crop", # Présentation captivante en formation
+        "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1080&h=1080&fit=crop", # Collaboration et partage de connaissances
+        "https://images.unsplash.com/photo-1577495508048-b635879837f1?w=1080&h=1080&fit=crop", # Séance de travail et pratique sur ordinateur
     ],
-    "ecommerce": [
-        "https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1080&h=1080&fit=crop", # Paiement en ligne sécurisé
-        "https://images.unsplash.com/photo-1512428559087-560fa5ceab42?w=1080&h=1080&fit=crop", # Achats sur mobile
+    "marketing_creative": [
+        "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=1080&h=1080&fit=crop", # Stratégie marketing & réseaux sociaux
+        "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1080&h=1080&fit=crop", # Brainstorming créatif d'équipe
+        "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=1080&h=1080&fit=crop", # Stratégie digitale sur grand écran
     ]
 }
 
-def get_stock_photo(query_or_topic="Tech"):
-    """Trouve une vraie photographie professionnelle HD sur Unsplash adaptée au sujet."""
-    query_lower = str(query_or_topic).lower()
-    
-    if any(k in query_lower for k in ["format", "cours", "appren", "tuto", "etudiant", "ecole"]):
-        category = "formation"
-    elif any(k in query_lower for k in ["vente", "commerce", "boutique", "shopp", "produit", "client", "remise", "promo"]):
-        category = "ecommerce"
-    elif any(k in query_lower for k in ["market", "pub", "visibilite", "croissance", "audience", "reseau"]):
-        category = "marketing"
-    elif any(k in query_lower for k in ["business", "coach", "entrepr", "argent", "service", "agence", "travail"]):
-        category = "business"
+def get_stock_photo(text_or_topic="Tech", used_urls=None):
+    """
+    Trouve une photo HD Unsplash adaptée au contenu RÉEL du post
+    et empêche la répétition de la même photo dans une campagne.
+    """
+    query_lower = str(text_or_topic).lower()
+
+    if any(k in query_lower for k in ["whatsapp", "messag", "chat", "contact", "dm", "inbox", "appel", "service client", "support", "repondre"]):
+        category = "whatsapp_mobile"
+    elif any(k in query_lower for k in ["vente", "chiffre", "argent", "revenu", "client", "prix", "promo", "remise", "croissance", "resultat", "offre", "commander"]):
+        category = "sales_growth"
+    elif any(k in query_lower for k in ["format", "cours", "appren", "tuto", "coaching", "atelier", "etudiant", "certif"]):
+        category = "training_coaching"
+    elif any(k in query_lower for k in ["market", "visibilit", "pub", "audience", "reseau", "communit", "strateg", "lead"]):
+        category = "marketing_creative"
     else:
-        category = "ia_tech"
-        
-    photos = UNSPLASH_CATALOG.get(category, UNSPLASH_CATALOG["ia_tech"])
-    chosen_url = random.choice(photos)
-    
+        category = "ai_tech"
+
+    photos = UNSPLASH_CATALOG.get(category, UNSPLASH_CATALOG["ai_tech"])
+
+    # Système anti-répétition : sélection d'une URL non encore utilisée
+    if used_urls is not None:
+        available = [u for u in photos if u not in used_urls]
+        if not available:
+            # Si toutes les photos de la catégorie ont été utilisées, chercher dans tout le catalogue
+            all_photos = [u for cat_list in UNSPLASH_CATALOG.values() for u in cat_list]
+            available = [u for u in all_photos if u not in used_urls]
+        if not available:
+            available = photos
+    else:
+        available = photos
+
+    chosen_url = random.choice(available)
+    if used_urls is not None:
+        used_urls.add(chosen_url)
+
     try:
-        res = requests.get(chosen_url, timeout=20)
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        res = requests.get(chosen_url, headers=headers, timeout=20)
         if res.status_code == 200 and len(res.content) > 10000:
             return res.content
     except Exception as e:
         print(f"Erreur get_stock_photo : {e}")
-        
-    return None
 
+    return None
 def download_image(prompt):
     import random
     clean_prompt = prompt.strip().replace('"', '').replace("'", "")
@@ -839,6 +856,7 @@ def schedule_campaign_on_facebook(config, max_posts=None, progress_callback=None
 
     total_to_schedule = len(future_slots)
     results = []
+    used_images_set = set()
 
     # Pré-récupération des actualités en 1 seule requête (gain de temps considérable)
     articles = []
@@ -896,7 +914,7 @@ Contactez Emmanuel Kint pour plus d'informations.
 #IA #Innovation #EmmanuelKint"""
 
             # Sélection photo Unsplash HD (ultra rapide)
-            img_bytes = get_stock_photo(topic_img) or download_image(f"modern clean photo {topic_img}")
+            img_bytes = get_stock_photo(post_text, used_urls=used_images_set) or download_image(f"modern clean photo {topic_img}")
             if not img_bytes:
                 item_err = {
                     "date": s_dt.strftime("%d/%m/%Y à %H:%M"),
