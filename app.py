@@ -1,3 +1,8 @@
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 import streamlit as st
 import json
 import os
@@ -45,36 +50,6 @@ bot.FB_PAGE_ID = FB_PAGE_ID
 bot.FB_PAGE_ACCESS_TOKEN = FB_TOKEN
 bot.TELEGRAM_BOT_TOKEN = TG_TOKEN
 bot.TELEGRAM_CHAT_ID = TG_CHAT_ID
-
-# --- 2. ÉCOUTEUR TELEGRAM SINGLETON SÉCURISÉ (ST.CACHE_RESOURCE) ---
-@st.cache_resource
-def start_global_telegram_listener(token, chat_id):
-    if not token or not chat_id:
-        return None
-    def runner():
-        import time
-        import requests
-        offset = 0
-        try:
-            init_res = requests.get(f"https://api.telegram.org/bot{token}/getUpdates?offset=-1", timeout=10)
-            if init_res.status_code == 200:
-                res_list = init_res.json().get("result", [])
-                if res_list:
-                    offset = res_list[-1]["update_id"] + 1
-        except Exception:
-            pass
-        while True:
-            try:
-                offset = bot.poll_once(token, chat_id, offset)
-            except Exception:
-                time.sleep(4)
-                
-    t = threading.Thread(target=runner, daemon=True, name="TelegramListenerThread")
-    t.start()
-    return t
-
-if TG_TOKEN and TG_CHAT_ID:
-    start_global_telegram_listener(TG_TOKEN, TG_CHAT_ID)
 
 # --- 3. AUTHENTIFICATION ---
 def check_password():

@@ -1,3 +1,8 @@
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 import os
 import sys
 import json
@@ -73,11 +78,7 @@ def handle_telegram_message(text, token=None, chat_id=None):
     config = agent.load_config()
     camp_status = agent.get_campaign_status(config)
 
-    # Réponse directe et énergique aux salutations amicales courantes
-    greetings = ["comment tu vas", "comment vas tu", "comment ca va", "comment ça va", "ca va", "ça va", "salut", "bonjour", "yo", "hello", "coucou", "cv", "slt"]
-    if text_clean.lower() in greetings:
-        send_tg_message("En pleine forme ! Prêt à faire rayonner ta page Facebook. De quoi as-tu besoin : publier une actu ou lancer une pub ?", t, c)
-        return
+    # Salutations et messages naturels traités directement par l'IA ci-dessous
 
     # 1. Commande Menu / Aide
     if text_clean.lower() in ["/start", "aide", "help", "menu"]:
@@ -193,7 +194,12 @@ def handle_telegram_message(text, token=None, chat_id=None):
     CHAT_HISTORY.append({"role": "user", "content": text_clean})
     
     # Appel à Gemini avec la mémoire récente
-    reply = agent.chat_with_agent(text_clean, history=CHAT_HISTORY)
+    try:
+        reply = agent.chat_with_agent(text_clean, history=CHAT_HISTORY)
+    except Exception as e:
+        print(f"Erreur contact Gemini : {e}")
+        send_tg_message("⚠️ Je rencontre une petite difficulté temporaire avec l'API Gemini. Peux-tu reformuler ou réessayer dans quelques secondes ?", t, c)
+        return
     
     # Nettoyage automatique des salutations intempestives
     clean_reply = reply.strip()
@@ -233,7 +239,10 @@ def poll_once(token, chat_id, offset):
                 msg = upd.get("message", {})
                 cid = str(msg.get("chat", {}).get("id", ""))
                 txt = msg.get("text", "").strip()
-                if cid == str(chat_id) and txt:
+                # Si le chat_id correspond ou si non configuré, on traite le message
+                if txt and (not chat_id or cid == str(chat_id)):
+                    if not chat_id:
+                        chat_id = cid
                     user_messages.append(txt)
                     
             # Si Emmanuel a envoyé plusieurs petits messages en quelques secondes, on les combine

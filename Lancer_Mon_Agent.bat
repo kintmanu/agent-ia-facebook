@@ -1,10 +1,9 @@
 @echo off
 title Mon Agence IA - Tableau de Bord
 echo ========================================================
-echo   Lancement de votre Mini-App IA Facebook & Telegram
+echo   Lancement du Tableau de Bord IA Facebook (Streamlit)
 echo ========================================================
 cd /d "%~dp0"
-pip install -r requirements.txt >nul 2>&1
-echo Demarrage du tableau de bord...
-streamlit run app.py
+echo Demarrage en cours, ouverture dans votre navigateur...
+py -3.12 -m streamlit run app.py
 pause

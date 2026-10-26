@@ -1,3 +1,8 @@
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 import os
 import sys
 import json
@@ -141,13 +146,7 @@ def call_gemini(prompt_or_contents, system_instruction=None, api_key=None):
     if not key:
         raise Exception("Clé GEMINI_API_KEY manquante.")
     
-    models_to_try = [
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash",
-        "gemini-flash-lite-latest",
-        "gemini-3.0-flash"
-    ]
+    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]
 
     # Préparation du format structuré
     if isinstance(prompt_or_contents, str):
@@ -155,20 +154,16 @@ def call_gemini(prompt_or_contents, system_instruction=None, api_key=None):
     else:
         structured_contents = prompt_or_contents
 
-    # 1. Tentative avec le SDK officiel google-genai
-    if genai is not None:
+    # 1. Si prompt simple (string), tentative via le SDK officiel google-genai
+    if genai is not None and isinstance(prompt_or_contents, str):
         try:
             client = genai.Client(api_key=key)
             for model_name in models_to_try:
                 try:
-                    # Envoi au SDK
-                    if isinstance(prompt_or_contents, str) and not system_instruction:
-                        res = client.models.generate_content(model=model_name, contents=prompt_or_contents)
-                    else:
-                        full_prompt = prompt_or_contents
-                        if isinstance(prompt_or_contents, str) and system_instruction:
-                            full_prompt = f"{system_instruction}\n\n{prompt_or_contents}"
-                        res = client.models.generate_content(model=model_name, contents=full_prompt)
+                    full_prompt = prompt_or_contents
+                    if system_instruction:
+                        full_prompt = f"{system_instruction}\n\n{prompt_or_contents}"
+                    res = client.models.generate_content(model=model_name, contents=full_prompt)
                     if res and res.text:
                         return res.text
                 except Exception as e:
@@ -177,7 +172,7 @@ def call_gemini(prompt_or_contents, system_instruction=None, api_key=None):
             print(f"Erreur init SDK genai : {e}")
 
     # 2. Repli REST direct (Garantit le respect du system_instruction et multi-tour)
-    for model_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+    for model_name in ["gemini-2.0-flash", "gemini-1.5-flash"]:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
             payload = {"contents": structured_contents}
