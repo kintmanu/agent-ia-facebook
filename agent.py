@@ -393,17 +393,26 @@ def get_page_access_token(token_to_use=None, target_page_id=None):
         
     return token, page_id
 
-def publish_to_facebook(text, image_bytes, page_id=None, access_token=None):
+def publish_to_facebook(text, image_bytes, page_id=None, access_token=None, scheduled_time=None):
     token, target_id = get_page_access_token(access_token, page_id)
     if not token:
         return False, "Jeton Facebook manquant (FB_PAGE_ACCESS_TOKEN)."
 
     url = f"https://graph.facebook.com/v19.0/{target_id}/photos"
     data = {"caption": text, "access_token": token}
+    
+    if scheduled_time:
+        # Programmation native sur les serveurs Facebook (UNIX timestamp en secondes)
+        data["published"] = "false"
+        data["scheduled_publish_time"] = str(int(scheduled_time))
+
     files = {"source": ("image.jpg", image_bytes, "image/jpeg")}
     try:
         res = requests.post(url, data=data, files=files, timeout=45)
         if res.status_code == 200:
+            if scheduled_time:
+                dt_str = datetime.datetime.fromtimestamp(scheduled_time).strftime("%d/%m/%Y à %H:%M")
+                return True, f"Publication programmée avec succès sur Facebook pour le {dt_str} !"
             return True, "Publication réussie avec succès sur la Page Facebook !"
         else:
             return False, res.text
@@ -640,3 +649,17 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+def test_facebook_token(token_to_test=None):
+    token = token_to_test or FB_PAGE_ACCESS_TOKEN
+    if not token:
+        return False, "Aucun jeton Facebook renseigné."
+    try:
+        res = requests.get(f"https://graph.facebook.com/v19.0/me?access_token={token}", timeout=15)
+        data = res.json()
+        if "error" in data:
+            return False, data["error"].get("message", "Erreur Facebook")
+        name = data.get("name", "Page Facebook")
+        return True, f"Connexion réussie ! Identifié en tant que : {name}"
+    except Exception as e:
+        return False, str(e)

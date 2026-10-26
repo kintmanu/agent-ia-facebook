@@ -109,6 +109,42 @@ with st.sidebar:
                     st.error("❌ Erreur lors de l'envoi sur Telegram.")
 
     st.divider()
+    with st.expander("🔑 Jeton de Page Facebook (Token)", expanded=False):
+        st.caption("Colle ici ton nouveau Jeton de Page Facebook permanent pour débloquer immédiatement les publications.")
+        new_fb_tok = st.text_input("Nouveau Jeton FB :", type="password", key="sidebar_fb_tok")
+        if st.button("💾 Sauvegarder & Tester le Jeton", use_container_width=True):
+            if new_fb_tok.strip():
+                clean_tok = new_fb_tok.strip().replace('"', '').replace("'", "")
+                agent.FB_PAGE_ACCESS_TOKEN = clean_tok
+                bot.FB_PAGE_ACCESS_TOKEN = clean_tok
+                
+                # Mise à jour du fichier .env
+                env_file = ".env"
+                env_lines = []
+                if os.path.exists(env_file):
+                    with open(env_file, "r", encoding="utf-8") as ef:
+                        env_lines = ef.readlines()
+                updated = False
+                for i, line in enumerate(env_lines):
+                    if line.startswith("FB_PAGE_ACCESS_TOKEN="):
+                        env_lines[i] = f"FB_PAGE_ACCESS_TOKEN={clean_tok}\n"
+                        updated = True
+                if not updated:
+                    env_lines.append(f"FB_PAGE_ACCESS_TOKEN={clean_tok}\n")
+                with open(env_file, "w", encoding="utf-8") as ef:
+                    ef.writelines(env_lines)
+                
+                # Test en direct avec Facebook
+                ok_tok, msg_tok = agent.test_facebook_token(clean_tok)
+                if ok_tok:
+                    st.success(f"✅ {msg_tok}")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Erreur Facebook : {msg_tok}")
+            else:
+                st.warning("⚠️ Veuillez coller un jeton.")
+
+    st.divider()
     if st.button("Déconnexion 🔒", use_container_width=True):
         st.session_state.authenticated = False
         st.rerun()
@@ -245,197 +281,222 @@ with tab_chat:
                 st.rerun()
 
 # =======================================================
-# ONGLET 2 : PROGRAMMATION DES CRÉNEAUX ET CAMPAGNE
+# ONGLET 2 : PROGRAMMATION SIMPLE & FLEXIBLE
 # =======================================================
 with tab_schedule:
-    st.subheader("🎯 Programmation des Créneaux Quotidiens & Durée de Campagne")
-    st.markdown("Configure précisément les heures de publication (Matin, Midi, Soir) et la durée de la campagne (7 jours, 1 mois ou personnalisé).")
+    st.subheader("🎯 Programmation Simple & Flexible")
+    st.caption("Choisis soit de programmer un post unique à une heure exacte (ex: aujourd'hui à 12:30), soit de lancer une campagne automatique sur plusieurs jours.")
 
-    slots = config.get("schedule_slots", {})
-    morning_slot = slots.get("morning", {"enabled": True, "time": "08h00"})
-    midday_slot = slots.get("midday", {"enabled": False, "time": "13h00"})
-    evening_slot = slots.get("evening", {"enabled": True, "time": "19h00"})
-
-    # --- 1. SÉLECTION DES 3 CRÉNEAUX HORAIRES ---
-    st.markdown("#### 1. Choix des Créneaux Quotidiens (Matin / Midi / Soir)")
-    st.caption("Active 1, 2 ou 3 créneaux par jour et règle l'heure exacte souhaitée pour chacun :")
-
-    heures_matin = ["06h00", "07h00", "08h00", "09h00", "10h00", "11h00"]
-    heures_midi = ["12h00", "12h30", "13h00", "13h30", "14h00", "15h00"]
-    heures_soir = ["17h00", "18h00", "19h00", "20h00", "21h00", "22h00"]
-
-    col_slot1, col_slot2, col_slot3 = st.columns(3)
-    
-    with col_slot1:
-        st.markdown("##### 🌅 Créneau MATIN")
-        m_enabled = st.checkbox("Activer le Matin", value=morning_slot.get("enabled", True), key="chk_m")
-        m_time = st.selectbox(
-            "Heure du matin :", 
-            heures_matin, 
-            index=heures_matin.index(morning_slot.get("time", "08h00")) if morning_slot.get("time") in heures_matin else 2,
-            disabled=not m_enabled,
-            key="sel_m"
-        )
-        
-    with col_slot2:
-        st.markdown("##### ☀️ Créneau MIDI")
-        d_enabled = st.checkbox("Activer le Midi", value=midday_slot.get("enabled", False), key="chk_d")
-        d_time = st.selectbox(
-            "Heure du midi :", 
-            heures_midi, 
-            index=heures_midi.index(midday_slot.get("time", "13h00")) if midday_slot.get("time") in heures_midi else 2,
-            disabled=not d_enabled,
-            key="sel_d"
-        )
-
-    with col_slot3:
-        st.markdown("##### 🌙 Créneau SOIR")
-        e_enabled = st.checkbox("Activer le Soir", value=evening_slot.get("enabled", True), key="chk_e")
-        e_time = st.selectbox(
-            "Heure du soir :", 
-            heures_soir, 
-            index=heures_soir.index(evening_slot.get("time", "19h00")) if evening_slot.get("time") in heures_soir else 2,
-            disabled=not e_enabled,
-            key="sel_e"
-        )
-
-    nb_creneaux_actifs = sum([1 for x in [m_enabled, d_enabled, e_enabled] if x])
-    if nb_creneaux_actifs == 0:
-        st.warning("⚠️ Aucun créneau n'est activé. L'agent sera en pause automatique.")
-    else:
-        st.success(f"✅ Configuration active : **{nb_creneaux_actifs} créneau(x) par jour** sélectionnés.")
-
-    st.divider()
-
-    # --- 2. DURÉE DE LA CAMPAGNE ---
-    st.markdown("#### 2. Durée de la Campagne de Publication")
-    st.caption("Combien de temps l'agent doit-il publier automatiquement ?")
-
-    options_duree = ["7 jours (1 semaine)", "14 jours (2 semaines)", "30 jours (1 mois)", "Nombre de jours personnalisé"]
-    saved_days = config.get("campaign_duration_days", 7)
-    
-    default_duree_idx = 0
-    if saved_days == 14:
-        default_duree_idx = 1
-    elif saved_days == 30:
-        default_duree_idx = 2
-    elif saved_days not in [7, 14, 30]:
-        default_duree_idx = 3
-
-    choix_duree = st.radio("Sélectionne la durée souhaitée :", options_duree, index=default_duree_idx)
-
-    if choix_duree == "7 jours (1 semaine)":
-        final_days = 7
-    elif choix_duree == "14 jours (2 semaines)":
-        final_days = 14
-    elif choix_duree == "30 jours (1 mois)":
-        final_days = 30
-    else:
-        final_days = st.number_input("Indique le nombre exact de jours :", min_value=1, max_value=180, value=saved_days)
-
-    # Calculs automatiques
-    start_date = datetime.date.today()
-    end_date = start_date + datetime.timedelta(days=final_days)
-    total_posts = final_days * nb_creneaux_actifs
-
-    col_calc1, col_calc2, col_calc3 = st.columns(3)
-    with col_calc1:
-        st.info(f"📅 **Date de début :** Aujourd'hui ({start_date.strftime('%d/%m/%Y')})")
-    with col_calc2:
-        st.info(f"🏁 **Date de fin :** {end_date.strftime('%d/%m/%Y')}")
-    with col_calc3:
-        st.info(f"📦 **Volume total prévu :** **{total_posts} publications** Facebook")
-
-    st.divider()
-
-    # --- 3. TYPE DE CONTENU PROGRAMMÉ ---
-    st.markdown("#### 3. Stratégie de Contenu pour les Publications Automatiques")
-    types_contenu = [
-        "Mixte (Actualités le matin & Publicités/Offres le soir)",
-        "Publicités & Vente uniquement (Campagne 100% commerciale)",
-        "Actualités & Valeur uniquement (Croissance d'audience & Notoriété)"
-    ]
-    saved_content_type = config.get("campaign_content_type", types_contenu[0])
-    selected_content_type = st.selectbox(
-        "Comment répartir les publications ?", 
-        types_contenu, 
-        index=types_contenu.index(saved_content_type) if saved_content_type in types_contenu else 0
+    type_prog = st.radio(
+        "Sélectionne ton besoin :",
+        [
+            "📌 Programmer une publication ponctuelle (ex: Aujourd'hui à 12:30 ou date précise)",
+            "🔄 Configurer une campagne automatique continue (Plusieurs jours)"
+        ],
+        index=0
     )
 
-    ad_topic_val = config.get("campaign_ad_topic", "Solutions, formations et opportunités professionnelles")
-    if "Publicités" in selected_content_type or "Mixte" in selected_content_type:
-        st.markdown("##### 📢 Offre ou Produit mis en avant dans les pubs programmées :")
-        ad_topic_val = st.text_input(
-            "Précise ton offre de référence pour que l'agent varie les angles publicitaires :", 
-            value=ad_topic_val,
-            placeholder="ex: Formation en Intelligence Artificielle et Coaching Business"
+    # ----------------------------------------------------
+    # MODE 1 : PUBLICATION UNIQUE À UNE HEURE PRÉCISE
+    # ----------------------------------------------------
+    if "📌" in type_prog:
+        st.markdown("### 📌 Programmer une publication ponctuelle")
+        st.info("💡 **Programmation directe sur Facebook :** Votre publication est envoyée aux serveurs de Facebook, qui la publieront automatiquement à l'heure exacte choisie, même si votre ordinateur est éteint !")
+
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+            date_cible = st.date_input("📅 Date de publication :", value=datetime.date.today(), min_value=datetime.date.today())
+        with col_p2:
+            heure_cible = st.time_input("⏰ Heure exacte souhaitée :", value=datetime.time(12, 30))
+
+        # Calcul du timestamp cible
+        target_dt = datetime.datetime.combine(date_cible, heure_cible)
+        now_dt = datetime.datetime.now()
+        diff_minutes = (target_dt - now_dt).total_seconds() / 60
+
+        if diff_minutes < 10:
+            st.warning("⚠️ Facebook exige que toute publication programmée soit prévue **au moins 10 minutes dans le futur**. Si vous souhaitez publier tout de suite, utilisez l'onglet '⚡ Radar & Publication Directe'.")
+
+        st.markdown("#### 📝 Contenu à programmer")
+        genre_post = st.selectbox(
+            "Quel type de publication programmer ?",
+            ["📢 Publicité / Promotion d'une Offre", "📰 Actualité & Veille IA"]
         )
 
-    st.divider()
+        if "Publicité" in genre_post:
+            ad_p_prod = st.text_input("Produit ou Service :", placeholder="ex: Formation en Intelligence Artificielle & Automatisation", key="prog_ad_prod")
+            ad_p_det = st.text_area("Détails & Avantages de l'offre :", placeholder="ex: -30% ce mois-ci, 10 places disponibles, accompagnement individuel...", height=90, key="prog_ad_det")
+            ad_p_cta = st.text_input("Appel à l'action :", value="Écrivez-moi en message privé pour réserver votre place !", key="prog_ad_cta")
+        else:
+            niche_actu = st.text_input("Thématique de l'actualité :", value=config.get("niche", "Intelligence Artificielle & Outils Tech"), key="prog_niche_actu")
 
-    # --- 4. THÉMATIQUE & STYLE ---
-    st.markdown("#### 4. Thématique et Ton de Communication")
-    col_th1, col_th2 = st.columns(2)
-    with col_th1:
-        niche_input = st.text_input("Niche / Thématique générale :", value=config.get("niche", "Intelligence Artificielle & Outils Tech"))
-    with col_th2:
-        tone_input = st.selectbox(
-            "Ton général :",
-            [
-                "Professionnel, captivant et vulgarisé",
-                "Persuasif, chaleureux et vendeur",
-                "Inspirant, percutant et dynamique",
-                "Accessible, pédagogique et amical"
-            ],
-            index=0
-        )
+        if st.button("📅 Valider et Programmer sur Facebook", type="primary", use_container_width=True):
+            if diff_minutes < 10:
+                st.error("❌ Impossible de programmer : l'heure choisie doit être au moins 10 minutes plus tard qu'actuellement.")
+            else:
+                with st.spinner("🤖 Génération du texte et de l'image HD 1080x1080..."):
+                    try:
+                        if "Publicité" in genre_post:
+                            if not ad_p_prod.strip():
+                                st.warning("Veuillez indiquer au moins le nom du produit ou service.")
+                                st.stop()
+                            ad_data = agent.generate_ad_post(
+                                product_name=ad_p_prod,
+                                offer_details=ad_p_det or ad_p_prod,
+                                cta=ad_p_cta,
+                                audience="Grand public & Clients",
+                                config=config
+                            )
+                            post_text = ad_data["post_text"]
+                            img_prompt = ad_data["image_prompt"]
+                        else:
+                            articles = agent.fetch_ai_news(config, force=True)
+                            if not articles:
+                                articles = [{"title": f"Dernières tendances en {config.get('niche', 'IA')}", "link": "https://news.google.com"}]
+                            news_data = agent.generate_post(articles, config)
+                            post_text = news_data["post_text"]
+                            img_prompt = news_data["image_prompt"]
 
-    # --- 5. ENREGISTREMENT & VALIDATION ---
-    st.divider()
-    camp_active_toggle = st.toggle("🚀 Activer la campagne automatique maintenant", value=config.get("active_campaign", True))
+                        img_bytes = agent.download_image(img_prompt)
+                        if not img_bytes:
+                            st.error("Erreur de génération de l'image.")
+                            st.stop()
 
-    if st.button("💾 Enregistrer et Lancer cette Programmation", type="primary", use_container_width=True):
-        config["schedule_slots"] = {
-            "morning": {"enabled": m_enabled, "time": m_time, "label": "Matin"},
-            "midday": {"enabled": d_enabled, "time": d_time, "label": "Midi"},
-            "evening": {"enabled": e_enabled, "time": e_time, "label": "Soir"}
-        }
-        config["campaign_duration_days"] = final_days
-        config["campaign_start_date"] = start_date.isoformat()
-        config["campaign_end_date"] = end_date.isoformat()
-        config["campaign_content_type"] = selected_content_type
-        config["campaign_ad_topic"] = ad_topic_val
-        config["niche"] = niche_input
-        config["keywords"] = niche_input
-        config["tone"] = tone_input
-        config["active_campaign"] = camp_active_toggle
-        
-        agent.save_config(config)
-        st.toast("🎉 Programmation enregistrée avec succès !", icon="✅")
-        
-        st.success(f"""✅ **PROGRAMMATION ENREGISTRÉE ET VALIDÉE !**
+                        # Envoi de la programmation à Facebook
+                        target_timestamp = int(target_dt.timestamp())
+                        ok, detail = agent.publish_to_facebook(post_text, img_bytes, scheduled_time=target_timestamp)
+                        
+                        if ok:
+                            dt_str = target_dt.strftime("%d/%m/%Y à %H:%M")
+                            st.success(f"🎉 **PUBLICATION PROGRAMMÉE AVEC SUCCÈS SUR FACEBOOK POUR LE {dt_str} !**")
+                            bot.send_tg_message(f"📅 **Publication programmée par Emmanuel !**
 
-📅 **Période active :** Du **{start_date.strftime('%d/%m/%Y')}** au **{end_date.strftime('%d/%m/%Y')}** ({final_days} jours)  
-⏰ **Créneaux configurés :** **{nb_creneaux_actifs} publication(s) par jour**  
-📦 **Total prévu :** **{total_posts} publications Facebook**  
-🎯 **Stratégie :** {selected_content_type}  
-🚀 **Statut :** {'🟢 Active' if camp_active_toggle else '⏸️ En pause'}
+Date : {dt_str}
+Type : {genre_post}
 
-*Confirmation également envoyée en direct sur ton Telegram !*""")
+Elle sera publiée automatiquement sur Facebook.")
+                            
+                            col_res1, col_res2 = st.columns([1, 1])
+                            with col_res1:
+                                st.image(img_bytes, caption="Image programmée (1080x1080)", use_column_width=True)
+                            with col_res2:
+                                st.markdown("**Texte programmé :**")
+                                st.info(post_text)
+                        else:
+                            st.error(f"❌ Erreur Facebook : {detail}")
+                            if "Session has expired" in detail or "OAuthException" in detail:
+                                st.warning("👉 Votre jeton Facebook a expiré. Mettez-le à jour dans la barre latérale gauche (🔑 Jeton de Page Facebook).")
+                    except Exception as e:
+                        st.error(f"Erreur : {e}")
 
-        # Notification Telegram immédiate
-        active_slots_list = []
-        if m_enabled: active_slots_list.append(f"Matin ({m_time})")
-        if d_enabled: active_slots_list.append(f"Midi ({d_time})")
-        if e_enabled: active_slots_list.append(f"Soir ({e_time})")
-        slots_text = ", ".join(active_slots_list) if active_slots_list else "Aucun"
-        
-        bot.send_tg_message(f"""🔔 **Nouvelle programmation enregistrée par Emmanuel :**
+    # ----------------------------------------------------
+    # MODE 2 : CAMPAGNE AUTOMATIQUE MULTI-JOURS
+    # ----------------------------------------------------
+    else:
+        st.markdown("### 🔄 Configurer une Campagne Automatique Continue")
+        st.caption("Définis la durée globale et les heures précises pour chaque créneau quotidien.")
 
-📅 Période : {start_date.strftime('%d/%m/%Y')} au {end_date.strftime('%d/%m/%Y')} ({final_days} jours)
-⏰ Créneaux : {slots_text}
-📦 Volume : {total_posts} publications Facebook
-🎯 Stratégie : {selected_content_type}""")
+        slots = config.get("schedule_slots", {})
+        morning_slot = slots.get("morning", {"enabled": True, "time": "08:00"})
+        midday_slot = slots.get("midday", {"enabled": False, "time": "12:30"})
+        evening_slot = slots.get("evening", {"enabled": True, "time": "19:00"})
+
+        # Conversion string time -> datetime.time
+        def parse_time_str(t_str, default_time):
+            try:
+                clean = t_str.replace("h", ":").strip()
+                parts = clean.split(":")
+                return datetime.time(int(parts[0]), int(parts[1]))
+            except Exception:
+                return default_time
+
+        m_default = parse_time_str(morning_slot.get("time", "08:00"), datetime.time(8, 0))
+        d_default = parse_time_str(midday_slot.get("time", "12:30"), datetime.time(12, 30))
+        e_default = parse_time_str(evening_slot.get("time", "19:00"), datetime.time(19, 0))
+
+        st.markdown("#### 1. Heures des Créneaux Quotidiens")
+        col_s1, col_s2, col_s3 = st.columns(3)
+        with col_s1:
+            st.markdown("##### 🌅 MATIN")
+            m_en = st.checkbox("Activer le matin", value=morning_slot.get("enabled", True), key="chk_m_flex")
+            m_t = st.time_input("Heure du matin :", value=m_default, disabled=not m_en, key="t_m_flex")
+        with col_s2:
+            st.markdown("##### ☀️ MIDI")
+            d_en = st.checkbox("Activer le midi", value=midday_slot.get("enabled", False), key="chk_d_flex")
+            d_t = st.time_input("Heure du midi :", value=d_default, disabled=not d_en, key="t_d_flex")
+        with col_s3:
+            st.markdown("##### 🌙 SOIR")
+            e_en = st.checkbox("Activer le soir", value=evening_slot.get("enabled", True), key="chk_e_flex")
+            e_t = st.time_input("Heure du soir :", value=e_default, disabled=not e_en, key="t_e_flex")
+
+        nb_actifs = sum([1 for x in [m_en, d_en, e_en] if x])
+        if nb_actifs == 0:
+            st.warning("⚠️ Aucun créneau activé.")
+        else:
+            st.success(f"✅ **{nb_actifs} créneau(x) actif(s) par jour**.")
+
+        st.divider()
+        st.markdown("#### 2. Durée de la Campagne")
+        duree_choices = ["1 jour", "3 jours", "7 jours (1 semaine)", "14 jours (2 semaines)", "30 jours (1 mois)", "Personnalisé"]
+        saved_d = config.get("campaign_duration_days", 7)
+        idx_c = 2
+        if saved_d == 1: idx_c = 0
+        elif saved_d == 3: idx_c = 1
+        elif saved_d == 7: idx_c = 2
+        elif saved_d == 14: idx_c = 3
+        elif saved_d == 30: idx_c = 4
+        else: idx_c = 5
+
+        sel_duree = st.radio("Combien de temps ?", duree_choices, index=idx_c)
+        if sel_duree == "1 jour": total_j = 1
+        elif sel_duree == "3 jours": total_j = 3
+        elif sel_duree == "7 jours (1 semaine)": total_j = 7
+        elif sel_duree == "14 jours (2 semaines)": total_j = 14
+        elif sel_duree == "30 jours (1 mois)": total_j = 30
+        else:
+            total_j = st.number_input("Nombre de jours :", min_value=1, max_value=180, value=saved_d)
+
+        s_date = datetime.date.today()
+        e_date = s_date + datetime.timedelta(days=total_j)
+        tot_posts = total_j * nb_actifs
+
+        col_c1, col_c2, col_c3 = st.columns(3)
+        with col_c1: st.info(f"📅 Début : {s_date.strftime('%d/%m/%Y')}")
+        with col_c2: st.info(f"🏁 Fin : {e_date.strftime('%d/%m/%Y')}")
+        with col_c3: st.info(f"📦 Total : **{tot_posts} posts prévus**")
+
+        st.divider()
+        st.markdown("#### 3. Stratégie & Contenu")
+        strat_opts = [
+            "Mixte (Actualités le matin & Publicités/Offres le soir)",
+            "Publicités & Vente uniquement (Campagne commerciale)",
+            "Actualités & Valeur uniquement (Notoriété)"
+        ]
+        chosen_strat = st.selectbox("Répartition :", strat_opts, index=0)
+        off_sujet = st.text_input("Offre ou Service promu dans les pubs :", value=config.get("campaign_ad_topic", "Solutions et formations en IA"))
+
+        st.divider()
+        if st.button("💾 Enregistrer la Campagne", type="primary", use_container_width=True):
+            config["schedule_slots"] = {
+                "morning": {"enabled": m_en, "time": m_t.strftime("%H:%M"), "label": "Matin"},
+                "midday": {"enabled": d_en, "time": d_t.strftime("%H:%M"), "label": "Midi"},
+                "evening": {"enabled": e_en, "time": e_t.strftime("%H:%M"), "label": "Soir"}
+            }
+            config["campaign_duration_days"] = total_j
+            config["campaign_start_date"] = s_date.isoformat()
+            config["campaign_end_date"] = e_date.isoformat()
+            config["campaign_content_type"] = chosen_strat
+            config["campaign_ad_topic"] = off_sujet
+            config["active_campaign"] = True
+            agent.save_config(config)
+
+            st.success(f"✅ **Campagne enregistrée pour {total_j} jour(s) ({tot_posts} publications) !**")
+            bot.send_tg_message(f"🔄 **Campagne enregistrée par Emmanuel :**
+
+Durée : {total_j} jours
+Créneaux : Matin ({m_t.strftime('%H:%M') if m_en else 'off'}), Midi ({d_t.strftime('%H:%M') if d_en else 'off'}), Soir ({e_t.strftime('%H:%M') if e_en else 'off'})
+Volume : {tot_posts} posts")
+
 
 # ==========================================
 # ONGLET 3 : CRÉATEUR DE PUBLICITÉS EXPRESS
