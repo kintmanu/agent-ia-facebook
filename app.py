@@ -658,6 +658,30 @@ with tab_schedule:
                 else:
                     st.warning(f"⚠️ {res_sched}")
 
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.expander("📅 Vérifier les publications programmées en direct sur Meta Facebook", expanded=False):
+            st.caption("Consultez en direct la file d'attente officielle de votre calendrier Meta Business Suite.")
+            if st.button("🔄 Actualiser le calendrier Meta", key="refresh_meta_sched_btn", use_container_width=True):
+                with st.spinner("Interrogation des serveurs Meta..."):
+                    ok_sch, data_sch = agent.get_scheduled_facebook_posts()
+                    if ok_sch:
+                        if not data_sch:
+                            st.info("ℹ️ Aucune publication programmée trouvée sur votre page Meta.")
+                        else:
+                            st.success(f"✅ **{len(data_sch)} publication(s) en attente dans le calendrier Meta !**")
+                            for p in data_sch:
+                                s_ts = p.get("scheduled_publish_time")
+                                if s_ts:
+                                    dt_txt = datetime.datetime.fromtimestamp(s_ts).strftime("%d/%m/%Y à %H:%M")
+                                else:
+                                    dt_txt = "Heure programmée"
+                                st.markdown(f"**⏰ Prévu pour le {dt_txt}**")
+                                st.info(p.get("message", "")[:250] + ("..." if len(p.get("message", "")) > 250 else ""))
+                    else:
+                        st.error(f"❌ Erreur Meta : {data_sch}")
+                        if "Session has expired" in str(data_sch) or "OAuthException" in str(data_sch):
+                            st.warning("👉 Votre jeton Facebook est expiré. Mettez-le à jour dans la barre latérale gauche (🔑 Jeton de Page Facebook).")
+
 
 # ==========================================
 # ONGLET 3 : CRÉATEUR DE PUBLICITÉS EXPRESS

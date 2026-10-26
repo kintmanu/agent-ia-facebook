@@ -12,6 +12,7 @@ import io
 import urllib.parse
 import datetime
 import requests
+import re
 
 # Imports tolérants aux pannes
 try:
@@ -303,8 +304,7 @@ FORMAT DE RÉPONSE OBLIGATOIRE (JSON strict) :
 Ne renvoie rien d'autre que ce JSON."""
 
     raw_output = call_gemini(prompt)
-    clean_json = raw_output.strip().replace("```json", "").replace("```", "").strip()
-    return json.loads(clean_json)
+    return parse_json_safely(raw_output, default_key="post_text")
 
 # 5. Rédacteur de Publicité / Promotion (Framework Marketing AIDA)
 def generate_ad_post(product_name, offer_details, cta="Contactez-moi en message privé", audience="Grand public", config=None):
@@ -343,8 +343,7 @@ FORMAT DE RÉPONSE OBLIGATOIRE EN JSON STRICT :
 Ne renvoie rien d'autre que ce JSON."""
 
     raw_output = call_gemini(prompt)
-    clean_json = raw_output.strip().replace("```json", "").replace("```", "").strip()
-    return json.loads(clean_json)
+    return parse_json_safely(raw_output, default_key="post_text")
 
 # 6. Prompt image à partir d'un texte libre
 def create_image_prompt_from_text(post_text):
@@ -920,4 +919,22 @@ def schedule_campaign_on_facebook(config, max_posts=None, progress_callback=None
             })
 
     return True, results
+
+def get_scheduled_facebook_posts(page_id=None, access_token=None):
+    """Récupère la liste des publications actuellement en attente dans Meta Business Suite."""
+    token, target_id = get_page_access_token(access_token, page_id)
+    if not token:
+        return False, "Jeton Facebook manquant."
+    url = f"https://graph.facebook.com/v19.0/{target_id}/scheduled_posts?fields=id,message,created_time,scheduled_publish_time&access_token={token}"
+    try:
+        res = requests.get(url, timeout=20)
+        data = res.json()
+        if res.status_code == 200:
+            posts = data.get("data", [])
+            return True, posts
+        else:
+            err = data.get("error", {}).get("message", res.text)
+            return False, err
+    except Exception as e:
+        return False, str(e)
 
