@@ -33,7 +33,7 @@ def get_secret(key, default=""):
     return str(val).strip().replace('"', '').replace("'", "")
 
 APP_PASSWORD = get_secret("APP_PASSWORD", "kint2026")
-GEMINI_KEY = get_secret("GEMINI_API_KEY")
+GEMINI_KEY = get_secret("GEMINI_API_KEY") or get_secret("GEMINI_KEY") or get_secret("GOOGLE_API_KEY")
 FB_PAGE_ID = get_secret("FB_PAGE_ID", "61578925910517")
 FB_TOKEN = get_secret("FB_PAGE_ACCESS_TOKEN")
 TG_TOKEN = get_secret("TELEGRAM_BOT_TOKEN")
@@ -109,10 +109,40 @@ with st.sidebar:
                     st.error("❌ Erreur lors de l'envoi sur Telegram.")
 
     st.divider()
-    with st.expander("🔑 Jeton de Page Facebook (Token)", expanded=False):
-        st.caption("Colle ici ton nouveau Jeton de Page Facebook permanent pour débloquer immédiatement les publications.")
+    with st.expander("🔑 Clés d'API (Gemini & Facebook)", expanded=False):
+        st.markdown("##### 🤖 Clé Google Gemini")
+        new_gem_key = st.text_input("Clé GEMINI_API_KEY :", value=agent.GEMINI_API_KEY or "", type="password", key="side_gem_key")
+        if st.button("🧪 Tester & Enregistrer Gemini", use_container_width=True):
+            if new_gem_key.strip():
+                clean_k = new_gem_key.strip().replace('"', '').replace("'", "")
+                ok_g, msg_g = agent.test_gemini_key(clean_k)
+                if ok_g:
+                    agent.GEMINI_API_KEY = clean_k
+                    bot.GEMINI_API_KEY = clean_k
+                    # Sauvegarde dans .env
+                    env_lines = []
+                    if os.path.exists(".env"):
+                        with open(".env", "r", encoding="utf-8") as ef:
+                            env_lines = ef.readlines()
+                    updated = False
+                    for i, l in enumerate(env_lines):
+                        if l.startswith("GEMINI_API_KEY="):
+                            env_lines[i] = f"GEMINI_API_KEY={clean_k}\n"
+                            updated = True
+                    if not updated:
+                        env_lines.append(f"GEMINI_API_KEY={clean_k}\n")
+                    with open(".env", "w", encoding="utf-8") as ef:
+                        ef.writelines(env_lines)
+                    st.success(f"✅ {msg_g}")
+                else:
+                    st.error(f"❌ {msg_g}")
+            else:
+                st.warning("⚠️ Veuillez entrer une clé.")
+
+        st.divider()
+        st.markdown("##### 📘 Jeton de Page Facebook")
         new_fb_tok = st.text_input("Nouveau Jeton FB :", type="password", key="sidebar_fb_tok")
-        if st.button("💾 Sauvegarder & Tester le Jeton", use_container_width=True):
+        if st.button("💾 Sauvegarder & Tester le Jeton FB", use_container_width=True):
             if new_fb_tok.strip():
                 clean_tok = new_fb_tok.strip().replace('"', '').replace("'", "")
                 agent.FB_PAGE_ACCESS_TOKEN = clean_tok

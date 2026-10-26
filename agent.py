@@ -142,15 +142,16 @@ def get_campaign_status(config):
 
 # 2. Appel robuste à Google Gemini (Support Multi-tours + REST Fallback)
 def call_gemini(prompt_or_contents, system_instruction=None, api_key=None):
-    key = (api_key or GEMINI_API_KEY or "").strip().replace('"', '').replace("'", "")
+    key = (api_key or GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "") or os.environ.get("GOOGLE_API_KEY", "")).strip().replace('"', '').replace("'", "")
     if not key:
-        raise Exception("Clé GEMINI_API_KEY manquante.")
+        raise Exception("Clé GEMINI_API_KEY manquante. Renseigne-la dans la barre latérale ou les secrets.")
     
     models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]
+    last_error = "Aucune réponse reçue"
 
     # Préparation du format structuré
     if isinstance(prompt_or_contents, str):
-        structured_contents = [{"role": "user", "parts": [{"text": prompt_or_contents}]}]
+        structured_contents = [{"parts": [{"text": prompt_or_contents}]}]
     else:
         structured_contents = prompt_or_contents
 
@@ -167,9 +168,11 @@ def call_gemini(prompt_or_contents, system_instruction=None, api_key=None):
                     if res and res.text:
                         return res.text
                 except Exception as e:
-                    print(f"SDK {model_name} : {e}")
+                    last_error = f"SDK {model_name} : {e}"
+                    print(last_error)
         except Exception as e:
-            print(f"Erreur init SDK genai : {e}")
+            last_error = f"Erreur init SDK genai : {e}"
+            print(last_error)
 
     # 2. Repli REST direct (Garantit le respect du system_instruction et multi-tour)
     for model_name in ["gemini-2.0-flash", "gemini-1.5-flash"]:
@@ -185,10 +188,19 @@ def call_gemini(prompt_or_contents, system_instruction=None, api_key=None):
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
                 if text:
                     return text
+            else:
+                try:
+                    err_data = res.json().get("error", {})
+                    err_msg = err_data.get("message", res.text)
+                except Exception:
+                    err_msg = res.text
+                last_error = f"Google (HTTP {res.status_code}) : {err_msg}"
+                print(f"REST {model_name} : {last_error}")
         except Exception as e:
-            print(f"REST {model_name} : {e}")
+            last_error = f"Erreur réseau REST {model_name} : {e}"
+            print(last_error)
             
-    raise Exception("Impossible de contacter Gemini (vérifie ta clé GEMINI_API_KEY).")
+    raise Exception(f"Impossible de contacter Gemini. Détail : {last_error}")
 
 # 3. Le Radar d'actualités (Google News RSS avec parsing robuste)
 def fetch_ai_news(config, force=False):
@@ -663,3 +675,22 @@ def test_facebook_token(token_to_test=None):
         return True, f"Connexion réussie ! Identifié en tant que : {name}"
     except Exception as e:
         return False, str(e)
+
+def test_gemini_key(key_to_test=None):
+    key = (key_to_test or GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "") or os.environ.get("GOOGLE_API_KEY", "")).strip().replace('"', '').replace("'", "")
+    if not key:
+        return False, "Aucune clé Gemini renseignée."
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
+    payload = {"contents": [{"parts": [{"text": "Reponds par le mot OK"}]}]}
+    try:
+        res = requests.post(url, json=payload, timeout=15)
+        if res.status_code == 200:
+            return True, "Clé Google Gemini 100% valide et fonctionnelle !"
+        else:
+            try:
+                err_data = res.json().get("error", {})
+                return False, f"Erreur Google (HTTP {res.status_code}) : {err_data.get('message', res.text)}"
+            except Exception:
+                return False, f"Erreur Google (HTTP {res.status_code}) : {res.text}"
+    except Exception as e:
+        return False, f"Erreur de connexion : {e}"
