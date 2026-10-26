@@ -39,6 +39,7 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 HF_TOKEN = os.environ.get("HF_TOKEN")
 PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
 SILICONFLOW_API_KEY = os.environ.get("SILICONFLOW_API_KEY")
+AGNES_API_KEY = os.environ.get("AGNES_API_KEY")
 
 CONFIG_FILE = "config.json"
 HISTORY_FILE = "history.txt"
@@ -511,6 +512,73 @@ def download_image(prompt):
 
 
 
+
+def test_agnes_token(token_to_test=None):
+    """Vérifie la validité d'une clé API Agnes AI."""
+    key = token_to_test or AGNES_API_KEY or os.environ.get("AGNES_API_KEY")
+    if not key:
+        return False, "Aucune clé Agnes AI renseignée."
+    url = "https://apihub.agnes-ai.com/v1/models"
+    headers = {"Authorization": f"Bearer {key.strip()}"}
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            return True, "Connexion réussie ! Clé Agnes AI valide et active."
+        elif res.status_code == 401:
+            return False, "Clé Agnes AI non reconnue ou invalide."
+        else:
+            return True, f"Clé Agnes AI enregistrée (Serveur code {res.status_code})."
+    except Exception as e:
+        return False, f"Erreur de connexion Agnes AI : {e}"
+
+def generate_image_agnes(prompt, api_key=None, model="agnes-image-2.1-flash"):
+    """
+    Génère une image IA photoréaliste via l'API officielle d'Agnes AI.
+    """
+    key = api_key or AGNES_API_KEY or os.environ.get("AGNES_API_KEY")
+    if not key:
+        return None, "Aucune clé Agnes AI disponible."
+
+    url = "https://apihub.agnes-ai.com/v1/images/generations"
+    headers = {
+        "Authorization": f"Bearer {key.strip()}",
+        "Content-Type": "application/json"
+    }
+
+    clean_prompt = prompt.strip().replace('"', '').replace("'", "")
+    enhanced_prompt = f"{clean_prompt}, professional commercial photography, studio lighting, crisp focus, 8k, highly detailed"
+
+    payload = {
+        "model": model,
+        "prompt": enhanced_prompt,
+        "n": 1,
+        "size": "1024x1024"
+    }
+
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=60)
+        if res.status_code == 200:
+            data = res.json()
+            data_list = data.get("data", [])
+            if data_list:
+                item = data_list[0]
+                if "url" in item and item["url"]:
+                    img_res = requests.get(item["url"], timeout=30)
+                    if img_res.status_code == 200:
+                        return img_res.content, "Image générée avec succès via Agnes AI !"
+                elif "b64_json" in item and item["b64_json"]:
+                    import base64
+                    return base64.b64decode(item["b64_json"]), "Image générée avec succès via Agnes AI !"
+            return None, "Format de réponse inattendu d'Agnes AI."
+        else:
+            try:
+                err_msg = res.json().get("error", {}).get("message", res.text)
+            except Exception:
+                err_msg = res.text[:150]
+            return None, f"Erreur Agnes AI ({res.status_code}) : {err_msg}"
+    except Exception as e:
+        return None, f"Erreur de connexion Agnes AI : {e}"
+
 def test_pexels_token(key_to_test=None):
     """Vérifie la validité d'une clé API Pexels."""
     key = key_to_test or PEXELS_API_KEY or os.environ.get("PEXELS_API_KEY")
@@ -604,11 +672,20 @@ def extract_visual_search_keywords(post_text, fallback="business technology"):
 def get_best_image_for_post(post_text, image_prompt=None, used_urls=None, config=None):
     """
     Sélectionne la meilleure image selon la cascade des modèles configurés :
-    1. SiliconFlow / Hugging Face (IA pure FLUX / Kolors si clé active)
-    2. Pexels API (Vraie photo HD correspondant exactement au sujet du post)
-    3. Catalogue Unsplash sémantique avec anti-doublon (Solution autonome 0 clé)
+    1. Agnes AI (Modèle d'image ultra-réaliste si clé active - Priorité absolue)
+    2. SiliconFlow / Hugging Face (IA FLUX / Kolors si configuré)
+    3. Pexels API (Vraie photo HD correspondant exactement au sujet du post)
+    4. Catalogue Unsplash sémantique avec anti-doublon (Solution autonome 0 clé)
     """
     cfg = config or load_config()
+
+    # 0. Agnes AI (Génération d'image IA sur-mesure)
+    agnes_key = cfg.get("agnes_api_key") or AGNES_API_KEY or os.environ.get("AGNES_API_KEY")
+    if agnes_key and image_prompt:
+        model = cfg.get("agnes_model", "agnes-image-2.1-flash")
+        img_bytes, ag_msg = generate_image_agnes(image_prompt, api_key=agnes_key, model=model)
+        if img_bytes:
+            return img_bytes, f"IA Agnes ({model})"
 
     # 1. SiliconFlow (IA Chinoise / FLUX / Kolors)
     sf_key = cfg.get("siliconflow_api_key") or SILICONFLOW_API_KEY or os.environ.get("SILICONFLOW_API_KEY")

@@ -75,6 +75,8 @@ PEXELS_API_KEY = get_secret("PEXELS_API_KEY")
 agent.PEXELS_API_KEY = PEXELS_API_KEY
 SILICONFLOW_API_KEY = get_secret("SILICONFLOW_API_KEY")
 agent.SILICONFLOW_API_KEY = SILICONFLOW_API_KEY
+AGNES_API_KEY = get_secret("AGNES_API_KEY")
+agent.AGNES_API_KEY = AGNES_API_KEY
 
 agent.GEMINI_API_KEY = GEMINI_KEY
 agent.FB_PAGE_ID = FB_PAGE_ID
@@ -303,6 +305,48 @@ with st.sidebar:
                 else:
                     st.error(f"❌ {msg_p}")
         st.markdown("[👉 Obtenir ma clé Pexels gratuite en 30s](https://www.pexels.com/api/)")
+
+        st.divider()
+        st.markdown("##### ⚡ Modèle Agnes AI (Génération d'Images)")
+        st.caption("Connectez **Agnes AI** (modèle `agnes-image-2.1-flash`) pour générer des images sur-mesure à partir de votre texte.")
+        cur_agnes = get_secret("AGNES_API_KEY")
+        in_agnes = st.text_input("Clé API Agnes AI :", type="password", value=cur_agnes, placeholder="Votre clé Agnes AI...", key="sidebar_agnes_key")
+        col_ag1, col_ag2 = st.columns(2)
+        with col_ag1:
+            if st.button("💾 Enregistrer", key="btn_save_agnes", use_container_width=True):
+                if in_agnes.strip():
+                    clean_ag = in_agnes.strip().replace('"', '').replace("'", "")
+                    agent.AGNES_API_KEY = clean_ag
+                    config["agnes_api_key"] = clean_ag
+                    agent.save_config(config)
+                    # Env update
+                    env_file = ".env"
+                    env_lines = []
+                    if os.path.exists(env_file):
+                        with open(env_file, "r", encoding="utf-8") as ef:
+                            env_lines = ef.readlines()
+                    updated = False
+                    for i, line in enumerate(env_lines):
+                        if line.startswith("AGNES_API_KEY="):
+                            env_lines[i] = f"AGNES_API_KEY={clean_ag}\n"
+                            updated = True
+                    if not updated:
+                        env_lines.append(f"AGNES_API_KEY={clean_ag}\n")
+                    with open(env_file, "w", encoding="utf-8") as ef:
+                        ef.writelines(env_lines)
+                    st.success("✅ Clé Agnes AI enregistrée !")
+                    st.rerun()
+                else:
+                    st.warning("Veuillez coller votre clé.")
+        with col_ag2:
+            if st.button("🧪 Tester", key="btn_test_agnes", use_container_width=True):
+                tok_test = in_agnes.strip() or cur_agnes
+                ok_ag, msg_ag = agent.test_agnes_token(tok_test)
+                if ok_ag:
+                    st.success(f"✅ {msg_ag}")
+                else:
+                    st.error(f"❌ {msg_ag}")
+        st.markdown("[👉 Accéder à platform.agnes-ai.com](https://platform.agnes-ai.com/)")
 
     st.divider()
     if st.button("Déconnexion 🔒", use_container_width=True):
