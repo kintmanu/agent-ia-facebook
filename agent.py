@@ -141,25 +141,49 @@ def get_campaign_status(config):
     }
 
 # 2. Appel robuste à Google Gemini (Support Multi-tours + REST Fallback)
+
+def get_available_gemini_models(api_key=None):
+    key = (api_key or GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "") or os.environ.get("GOOGLE_API_KEY", "")).strip().replace('"', '').replace("'", "")
+    if not key:
+        return ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"]
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
+        res = requests.get(url, timeout=10)
+        if res.status_code == 200:
+            models_list = res.json().get("models", [])
+            supported = []
+            for m in models_list:
+                name = m.get("name", "").replace("models/", "")
+                methods = m.get("supportedGenerationMethods", [])
+                if "generateContent" in methods and "vision" not in name:
+                    supported.append(name)
+            preferred = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"]
+            ordered = [m for m in preferred if m in supported] + [m for m in supported if m not in preferred]
+            if ordered:
+                return ordered
+    except Exception as e:
+        print(f"ListModels info: {e}")
+    return ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"]
+
 def call_gemini(prompt_or_contents, system_instruction=None, api_key=None):
     key = (api_key or GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "") or os.environ.get("GOOGLE_API_KEY", "")).strip().replace('"', '').replace("'", "")
     if not key:
         raise Exception("Clé GEMINI_API_KEY manquante. Renseigne-la dans la barre latérale ou les secrets.")
     
-    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]
+    models_to_try = get_available_gemini_models(key)
     last_error = "Aucune réponse reçue"
 
-    # Préparation du format structuré
+    # Format de payload REST standard
     if isinstance(prompt_or_contents, str):
         structured_contents = [{"parts": [{"text": prompt_or_contents}]}]
     else:
         structured_contents = prompt_or_contents
 
-    # 1. Si prompt simple (string), tentative via le SDK officiel google-genai
+    # 1. Tentative SDK officiel google-genai si prompt simple
     if genai is not None and isinstance(prompt_or_contents, str):
         try:
             client = genai.Client(api_key=key)
-            for model_name in models_to_try:
+            for model_name in models_to_try[:2]:
                 try:
                     full_prompt = prompt_or_contents
                     if system_instruction:
@@ -169,13 +193,11 @@ def call_gemini(prompt_or_contents, system_instruction=None, api_key=None):
                         return res.text
                 except Exception as e:
                     last_error = f"SDK {model_name} : {e}"
-                    print(last_error)
         except Exception as e:
-            last_error = f"Erreur init SDK genai : {e}"
-            print(last_error)
+            last_error = f"SDK init : {e}"
 
-    # 2. Repli REST direct (Garantit le respect du system_instruction et multi-tour)
-    for model_name in ["gemini-2.0-flash", "gemini-1.5-flash"]:
+    # 2. Repli REST direct avec modèles actifs découverts
+    for model_name in models_to_try:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
             payload = {"contents": structured_contents}
@@ -194,10 +216,10 @@ def call_gemini(prompt_or_contents, system_instruction=None, api_key=None):
                     err_msg = err_data.get("message", res.text)
                 except Exception:
                     err_msg = res.text
-                last_error = f"Google (HTTP {res.status_code}) : {err_msg}"
+                last_error = f"Google {model_name} (HTTP {res.status_code}) : {err_msg}"
                 print(f"REST {model_name} : {last_error}")
         except Exception as e:
-            last_error = f"Erreur réseau REST {model_name} : {e}"
+            last_error = f"Réseau REST {model_name} : {e}"
             print(last_error)
             
     raise Exception(f"Impossible de contacter Gemini. Détail : {last_error}")
@@ -680,12 +702,16 @@ def test_gemini_key(key_to_test=None):
     key = (key_to_test or GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "") or os.environ.get("GOOGLE_API_KEY", "")).strip().replace('"', '').replace("'", "")
     if not key:
         return False, "Aucune clé Gemini renseignée."
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
-    payload = {"contents": [{"parts": [{"text": "Reponds par le mot OK"}]}]}
+    
+    models = get_available_gemini_models(key)
+    target_model = models[0] if models else "gemini-2.5-flash"
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={key}"
+    payload = {"contents": [{"parts": [{"text": "Reponds uniquement: OK"}]}]}
     try:
         res = requests.post(url, json=payload, timeout=15)
         if res.status_code == 200:
-            return True, "Clé Google Gemini 100% valide et fonctionnelle !"
+            return True, f"Clé Google Gemini 100% valide et fonctionnelle ! (Modèle actif : {target_model})"
         else:
             try:
                 err_data = res.json().get("error", {})
