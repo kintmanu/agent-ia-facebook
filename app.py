@@ -369,12 +369,8 @@ with tab_schedule:
                         if ok:
                             dt_str = target_dt.strftime("%d/%m/%Y à %H:%M")
                             st.success(f"🎉 **PUBLICATION PROGRAMMÉE AVEC SUCCÈS SUR FACEBOOK POUR LE {dt_str} !**")
-                            bot.send_tg_message(f"📅 **Publication programmée par Emmanuel !**
-
-Date : {dt_str}
-Type : {genre_post}
-
-Elle sera publiée automatiquement sur Facebook.")
+                            msg_alert = f"Publication programmée pour le {dt_str} !"
+                            bot.send_tg_message(msg_alert)
                             
                             col_res1, col_res2 = st.columns([1, 1])
                             with col_res1:
@@ -491,11 +487,8 @@ Elle sera publiée automatiquement sur Facebook.")
             agent.save_config(config)
 
             st.success(f"✅ **Campagne enregistrée pour {total_j} jour(s) ({tot_posts} publications) !**")
-            bot.send_tg_message(f"🔄 **Campagne enregistrée par Emmanuel :**
-
-Durée : {total_j} jours
-Créneaux : Matin ({m_t.strftime('%H:%M') if m_en else 'off'}), Midi ({d_t.strftime('%H:%M') if d_en else 'off'}), Soir ({e_t.strftime('%H:%M') if e_en else 'off'})
-Volume : {tot_posts} posts")
+            msg_camp = f"Campagne enregistrée pour {total_j} jours ({tot_posts} posts)."
+            bot.send_tg_message(msg_camp)
 
 
 # ==========================================
