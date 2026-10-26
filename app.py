@@ -57,6 +57,10 @@ TG_TOKEN = get_secret("TELEGRAM_BOT_TOKEN")
 TG_CHAT_ID = get_secret("TELEGRAM_CHAT_ID")
 HF_TOKEN = get_secret("HF_TOKEN")
 agent.HF_TOKEN = HF_TOKEN
+PEXELS_API_KEY = get_secret("PEXELS_API_KEY")
+agent.PEXELS_API_KEY = PEXELS_API_KEY
+SILICONFLOW_API_KEY = get_secret("SILICONFLOW_API_KEY")
+agent.SILICONFLOW_API_KEY = SILICONFLOW_API_KEY
 
 agent.GEMINI_API_KEY = GEMINI_KEY
 agent.FB_PAGE_ID = FB_PAGE_ID
@@ -243,6 +247,23 @@ with st.sidebar:
                 else:
                     st.error(f"❌ {msg_h}")
         st.markdown("[👉 Créer mon compte gratuit Hugging Face (1 min)](https://huggingface.co/settings/tokens)")
+
+        st.divider()
+        st.markdown("##### 📸 Option Gratuite Pexels (Photos HD)")
+        st.caption("20 000 photos gratuites/mois avec l'API officielle Pexels (100% stable, sans limite de mémoire).")
+        cur_pex = get_secret("PEXELS_API_KEY")
+        in_pex = st.text_input("Clé API Pexels (Gratuite) :", type="password", value=cur_pex, placeholder="Clé Pexels...", key="sidebar_pex_key")
+        if st.button("💾 Enregistrer Clé Pexels", key="btn_save_pex", use_container_width=True):
+            if in_pex.strip():
+                clean_p = in_pex.strip()
+                agent.PEXELS_API_KEY = clean_p
+                config["pexels_api_key"] = clean_p
+                agent.save_config(config)
+                st.success("✅ Clé Pexels enregistrée !")
+                st.rerun()
+            else:
+                st.warning("Veuillez coller votre clé.")
+        st.markdown("[👉 Obtenir ma clé Pexels gratuite en 30s](https://www.pexels.com/api/)")
 
     st.divider()
     if st.button("Déconnexion 🔒", use_container_width=True):

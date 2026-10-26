@@ -37,6 +37,8 @@ FB_PAGE_ACCESS_TOKEN = os.environ.get("FB_PAGE_ACCESS_TOKEN")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 HF_TOKEN = os.environ.get("HF_TOKEN")
+PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
+SILICONFLOW_API_KEY = os.environ.get("SILICONFLOW_API_KEY")
 
 CONFIG_FILE = "config.json"
 HISTORY_FILE = "history.txt"
@@ -484,6 +486,62 @@ def download_image(prompt):
 
     return None
 
+
+
+def get_pexels_photo(query, pexels_key=None, used_urls=None):
+    """Recherche une vraie photo HD professionnelle sur Pexels via l'API gratuite."""
+    key = pexels_key or PEXELS_API_KEY or os.environ.get("PEXELS_API_KEY")
+    if not key:
+        return None
+    url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(query)}&per_page=15&orientation=square"
+    headers = {"Authorization": key.strip()}
+    try:
+        res = requests.get(url, headers=headers, timeout=15)
+        if res.status_code == 200:
+            photos = res.json().get("photos", [])
+            for p in photos:
+                src = p.get("src", {}).get("large2x") or p.get("src", {}).get("large")
+                if src and (used_urls is None or src not in used_urls):
+                    if used_urls is not None:
+                        used_urls.add(src)
+                    img_res = requests.get(src, timeout=20)
+                    if img_res.status_code == 200 and len(img_res.content) > 10000:
+                        return img_res.content
+    except Exception as e:
+        print(f"Erreur Pexels : {e}")
+    return None
+
+def generate_image_siliconflow(prompt, api_key=None, model="black-forest-labs/FLUX.1-schnell"):
+    """Génère une image IA via l'API SiliconFlow (FLUX.1-schnell ou Kolors)."""
+    key = api_key or SILICONFLOW_API_KEY or os.environ.get("SILICONFLOW_API_KEY")
+    if not key:
+        return None, "Aucune clé SiliconFlow renseignée."
+    url = "https://api.siliconflow.com/v1/images/generations"
+    headers = {
+        "Authorization": f"Bearer {key.strip()}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": model,
+        "prompt": f"{prompt}, commercial photography, studio lighting, crisp focus, 8k photo",
+        "image_size": "1024x1024"
+    }
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=50)
+        if res.status_code == 200:
+            data = res.json()
+            images = data.get("images", [])
+            if images:
+                img_url = images[0].get("url")
+                if img_url:
+                    img_res = requests.get(img_url, timeout=25)
+                    if img_res.status_code == 200:
+                        return img_res.content, "Image générée avec succès via SiliconFlow !"
+            return None, "Réponse inattendue de SiliconFlow."
+        else:
+            return None, f"Erreur SiliconFlow ({res.status_code}) : {res.text[:200]}"
+    except Exception as e:
+        return None, f"Erreur connexion SiliconFlow : {e}"
 
 def test_huggingface_token(token_to_test=None):
     """Vérifie la validité d'un jeton gratuit Hugging Face."""
@@ -973,10 +1031,21 @@ Contactez Emmanuel Kint pour plus d'informations.
             elif not is_ad and isinstance(news_data, dict) and news_data.get("image_prompt"):
                 img_prompt_ad = news_data.get("image_prompt")
 
-            if HF_TOKEN or os.environ.get("HF_TOKEN"):
+            # 1. Tentative SiliconFlow (FLUX / Kolors)
+            if (SILICONFLOW_API_KEY or os.environ.get("SILICONFLOW_API_KEY")) and not img_bytes:
+                img_bytes, sf_status = generate_image_siliconflow(img_prompt_ad, model=config.get("sf_model", "black-forest-labs/FLUX.1-schnell"))
+
+            # 2. Tentative Hugging Face (si configuré)
+            if (HF_TOKEN or os.environ.get("HF_TOKEN")) and not img_bytes:
                 img_bytes, hf_status = generate_image_with_huggingface(img_prompt_ad, model=config.get("hf_model", "black-forest-labs/FLUX.1-schnell"))
 
-            # Priorité 2 : Vraie photo Unsplash contextuelle sans doublon
+            # 3. Tentative Pexels API (Vraies photos HD gratuites)
+            if (PEXELS_API_KEY or os.environ.get("PEXELS_API_KEY")) and not img_bytes:
+                # Extraire 2-3 mots clés
+                kw_query = topic_img if len(topic_img) < 30 else "business technology"
+                img_bytes = get_pexels_photo(kw_query, used_urls=used_images_set)
+
+            # 4. Solution native sans clé : Unsplash contextuel avec anti-doublon
             if not img_bytes:
                 img_bytes = get_stock_photo(post_text, used_urls=used_images_set) or download_image(f"modern clean photo {topic_img}")
             if not img_bytes:
