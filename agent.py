@@ -543,6 +543,65 @@ def generate_image_siliconflow(prompt, api_key=None, model="black-forest-labs/FL
     except Exception as e:
         return None, f"Erreur connexion SiliconFlow : {e}"
 
+
+def extract_visual_search_keywords(post_text, fallback="business technology"):
+    """Extrait les 2-3 mots clés visuels les plus pertinents en anglais pour Pexels."""
+    text_lower = str(post_text).lower()
+    if any(k in text_lower for k in ["whatsapp", "messag", "chat", "dm", "service client", "inbox"]):
+        return "smartphone messaging business"
+    elif any(k in text_lower for k in ["vente", "chiffre", "argent", "revenu", "croissance", "resultat", "prix", "promo"]):
+        return "business growth charts success"
+    elif any(k in text_lower for k in ["format", "cours", "appren", "tuto", "coaching", "atelier"]):
+        return "workshop technology computer learning"
+    elif any(k in text_lower for k in ["robot", "ia", "intelligence artificielle", "automat"]):
+        return "artificial intelligence high tech"
+    elif any(k in text_lower for k in ["ecommerce", "boutique", "produit", "livraison"]):
+        return "online shopping delivery"
+    elif any(k in text_lower for k in ["video", "youtube", "tiktok", "contenu"]):
+        return "content creator studio video"
+    return fallback
+
+def get_best_image_for_post(post_text, image_prompt=None, used_urls=None, config=None):
+    """
+    Sélectionne la meilleure image selon la cascade des modèles configurés :
+    1. SiliconFlow / Hugging Face (IA pure FLUX / Kolors si clé active)
+    2. Pexels API (Vraie photo HD correspondant exactement au sujet du post)
+    3. Catalogue Unsplash sémantique avec anti-doublon (Solution autonome 0 clé)
+    """
+    cfg = config or load_config()
+
+    # 1. SiliconFlow (IA Chinoise / FLUX / Kolors)
+    sf_key = cfg.get("siliconflow_api_key") or SILICONFLOW_API_KEY or os.environ.get("SILICONFLOW_API_KEY")
+    if sf_key and image_prompt:
+        model = cfg.get("sf_model", "black-forest-labs/FLUX.1-schnell")
+        img_bytes, sf_msg = generate_image_siliconflow(image_prompt, api_key=sf_key, model=model)
+        if img_bytes:
+            return img_bytes, f"IA SiliconFlow ({model})"
+
+    # 2. Hugging Face (IA FLUX / Kolors)
+    hf_tok = cfg.get("hf_token") or HF_TOKEN or os.environ.get("HF_TOKEN")
+    if hf_tok and image_prompt:
+        model = cfg.get("hf_model", "black-forest-labs/FLUX.1-schnell")
+        img_bytes, hf_msg = generate_image_with_huggingface(image_prompt, hf_token=hf_tok, model=model)
+        if img_bytes:
+            return img_bytes, f"IA Hugging Face ({model})"
+
+    # 3. Pexels API (Vraie photo HD ultra-ciblée)
+    pex_key = cfg.get("pexels_api_key") or PEXELS_API_KEY or os.environ.get("PEXELS_API_KEY")
+    if pex_key:
+        kw = extract_visual_search_keywords(post_text)
+        img_bytes = get_pexels_photo(kw, pexels_key=pex_key, used_urls=used_urls)
+        if img_bytes:
+            return img_bytes, f"Pexels HD ({kw})"
+
+    # 4. Catalogue contextuel Unsplash Anti-Doublon
+    img_bytes = get_stock_photo(post_text, used_urls=used_urls)
+    if img_bytes:
+        return img_bytes, "Unsplash HD"
+
+    # 5. Dernier recours standard
+    return download_image("modern clean professional photography"), "Standard"
+
 def test_huggingface_token(token_to_test=None):
     """Vérifie la validité d'un jeton gratuit Hugging Face."""
     tok = token_to_test or HF_TOKEN or os.environ.get("HF_TOKEN")
@@ -1031,23 +1090,18 @@ Contactez Emmanuel Kint pour plus d'informations.
             elif not is_ad and isinstance(news_data, dict) and news_data.get("image_prompt"):
                 img_prompt_ad = news_data.get("image_prompt")
 
-            # 1. Tentative SiliconFlow (FLUX / Kolors)
-            if (SILICONFLOW_API_KEY or os.environ.get("SILICONFLOW_API_KEY")) and not img_bytes:
-                img_bytes, sf_status = generate_image_siliconflow(img_prompt_ad, model=config.get("sf_model", "black-forest-labs/FLUX.1-schnell"))
+            img_prompt_ad = topic_img
+            if is_ad and isinstance(ad_data, dict) and ad_data.get("image_prompt"):
+                img_prompt_ad = ad_data.get("image_prompt")
+            elif not is_ad and isinstance(news_data, dict) and news_data.get("image_prompt"):
+                img_prompt_ad = news_data.get("image_prompt")
 
-            # 2. Tentative Hugging Face (si configuré)
-            if (HF_TOKEN or os.environ.get("HF_TOKEN")) and not img_bytes:
-                img_bytes, hf_status = generate_image_with_huggingface(img_prompt_ad, model=config.get("hf_model", "black-forest-labs/FLUX.1-schnell"))
-
-            # 3. Tentative Pexels API (Vraies photos HD gratuites)
-            if (PEXELS_API_KEY or os.environ.get("PEXELS_API_KEY")) and not img_bytes:
-                # Extraire 2-3 mots clés
-                kw_query = topic_img if len(topic_img) < 30 else "business technology"
-                img_bytes = get_pexels_photo(kw_query, used_urls=used_images_set)
-
-            # 4. Solution native sans clé : Unsplash contextuel avec anti-doublon
-            if not img_bytes:
-                img_bytes = get_stock_photo(post_text, used_urls=used_images_set) or download_image(f"modern clean photo {topic_img}")
+            img_bytes, img_source = get_best_image_for_post(
+                post_text=post_text,
+                image_prompt=img_prompt_ad,
+                used_urls=used_images_set,
+                config=config
+            )
             if not img_bytes:
                 item_err = {
                     "date": s_dt.strftime("%d/%m/%Y à %H:%M"),

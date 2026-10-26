@@ -656,12 +656,12 @@ with tab_schedule:
                                 config=config
                             )
                             p_text = ad_data.get("post_text", "")
-                            p_img = agent.get_stock_photo(off_sujet) or agent.download_image(f"photo {off_sujet}")
+                            p_img, p_src = agent.get_best_image_for_post(p_text, image_prompt=ad_data.get("image_prompt"), config=config)
                         else:
                             arts = agent.fetch_ai_news(config, force=True) or [{"title": f"Dernières tendances {config.get('niche', 'IA')}", "link": "https://news.google.com"}]
                             n_data = agent.generate_post(arts, config)
                             p_text = n_data.get("post_text", "")
-                            p_img = agent.get_stock_photo(config.get("niche", "Tech")) or agent.download_image("photo technology")
+                            p_img, p_src = agent.get_best_image_for_post(p_text, image_prompt=n_data.get("image_prompt"), config=config)
 
                         if p_img:
                             ok_pub, msg_pub = agent.publish_to_facebook(p_text, p_img)
