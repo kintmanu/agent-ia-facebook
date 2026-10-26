@@ -360,6 +360,20 @@ with tab_schedule:
         else:
             niche_actu = st.text_input("Thématique de l'actualité :", value=config.get("niche", "Intelligence Artificielle & Outils Tech"), key="prog_niche_actu")
 
+        st.markdown("#### 🖼️ Choix de l'image pour ce post")
+        visuel_p_type = st.radio(
+            "Source du visuel :",
+            [
+                "📸 Vraie photo professionnelle libre de droits (Unsplash HD - 100% réaliste)",
+                "📁 Téléverser mon propre visuel / flyer (depuis mon téléphone ou PC)",
+                "🎨 Image générée par IA"
+            ],
+            key="prog_visuel_type"
+        )
+        custom_prog_file = None
+        if "📁" in visuel_p_type:
+            custom_prog_file = st.file_uploader("Sélectionnez votre photo ou flyer :", type=["jpg", "jpeg", "png"], key="prog_file_up")
+
         if st.button("📅 Valider et Programmer sur Facebook", type="primary", use_container_width=True):
             if diff_minutes < 10:
                 st.error("❌ Impossible de programmer : l'heure choisie doit être au moins 10 minutes plus tard qu'actuellement.")
@@ -387,9 +401,16 @@ with tab_schedule:
                             post_text = news_data["post_text"]
                             img_prompt = news_data["image_prompt"]
 
-                        img_bytes = agent.download_image(img_prompt)
+                        if custom_prog_file is not None:
+                            img_bytes = custom_prog_file.getvalue()
+                        elif "📸" in visuel_p_type:
+                            topic_ref = ad_p_prod if "Publicité" in genre_post else niche_actu
+                            img_bytes = agent.get_stock_photo(topic_ref) or agent.download_image(img_prompt)
+                        else:
+                            img_bytes = agent.download_image(img_prompt)
+
                         if not img_bytes:
-                            st.error("Erreur de génération de l'image.")
+                            st.error("Erreur de chargement de l'image.")
                             st.stop()
 
                         # Envoi de la programmation à Facebook
@@ -536,6 +557,20 @@ with tab_ads:
         ad_cta_field = st.text_input("Appel à l'action (CTA) :", value="Écrivez-moi en message privé pour réserver votre place !")
         ad_aud_field = st.text_input("Public cible :", value="Entrepreneurs, créateurs et professionnels")
 
+    st.markdown("#### 🖼️ Choix de l'image publicitaire")
+    ad_visuel_type = st.radio(
+        "Source du visuel :",
+        [
+            "📸 Vraie photo professionnelle libre de droits (Unsplash HD - 100% réaliste)",
+            "📁 Téléverser ma propre image / affiche (PC ou Téléphone)",
+            "🎨 Image générée par IA"
+        ],
+        key="ad_visuel_type"
+    )
+    custom_ad_file = None
+    if "📁" in ad_visuel_type:
+        custom_ad_file = st.file_uploader("Sélectionnez votre visuel :", type=["jpg", "jpeg", "png"], key="ad_file_up")
+
     if st.button("✨ Rédiger la Publicité & Générer la Photo Studio", type="primary", use_container_width=True):
         if not ad_prod.strip():
             st.warning("⚠️ Renseigne au moins le nom du produit ou service.")
@@ -543,7 +578,12 @@ with tab_ads:
             with st.spinner("🤖 Rédaction du copywriting AIDA et création de la photo studio..."):
                 try:
                     res_ad = agent.generate_ad_post(ad_prod, ad_det, ad_cta_field, ad_aud_field, config)
-                    img_bytes = agent.download_image(res_ad["image_prompt"])
+                    if custom_ad_file is not None:
+                        img_bytes = custom_ad_file.getvalue()
+                    elif "📸" in ad_visuel_type:
+                        img_bytes = agent.get_stock_photo(ad_prod) or agent.download_image(res_ad["image_prompt"])
+                    else:
+                        img_bytes = agent.download_image(res_ad["image_prompt"])
                     if img_bytes:
                         st.session_state.ad_text = res_ad["post_text"]
                         st.session_state.ad_image = img_bytes
@@ -604,8 +644,8 @@ with tab_live:
             content = agent.generate_post(articles, config)
             status_box.write("📝 Post rédigé avec succès !")
             
-            status_box.write("🎨 3. Création de l'image haute définition (FLUX, 0 logo)...")
-            image_data = agent.download_image(content["image_prompt"])
+            status_box.write("🎨 3. Sélection de la photo professionnelle haute définition (Libre de droits)...")
+            image_data = agent.get_stock_photo(articles[0]['title']) or agent.download_image(content["image_prompt"])
             if not image_data:
                 status_box.update(label="Erreur génération image", state="error")
                 st.stop()

@@ -363,6 +363,69 @@ Règles :
         return "modern high-tech clean studio photography, cinematic lighting, crisp focus, 8k photo"
 
 # 7. Téléchargement et découpage anti-filigrane (0 LOGO GARANTI)
+
+# --- CATALOGUE DE VRAIES PHOTOS PROFESSIONNELLES LIBRES DE DROITS (UNSPLASH HD 1080x1080) ---
+UNSPLASH_CATALOG = {
+    "formation": [
+        "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1080&h=1080&fit=crop", # Classe moderne & apprentissage
+        "https://images.unsplash.com/photo-1531482615713-2afd69097998?w=1080&h=1080&fit=crop", # Présentation tech & formation
+        "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1080&h=1080&fit=crop", # Étudiant concentré sur laptop
+        "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1080&h=1080&fit=crop", # Travail d'équipe en formation
+        "https://images.unsplash.com/photo-1577495508048-b635879837f1?w=1080&h=1080&fit=crop", # Session de travail moderne
+    ],
+    "ia_tech": [
+        "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1080&h=1080&fit=crop", # Circuit imprimé haute technologie
+        "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&h=1080&fit=crop", # Ondes abstraites modernes
+        "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1080&h=1080&fit=crop", # Écran de programmation
+        "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=1080&h=1080&fit=crop", # Data center & cybersécurité
+        "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=1080&h=1080&fit=crop", # Technologie digitale
+        "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1080&h=1080&fit=crop", # Robotique blanche épurée
+    ],
+    "business": [
+        "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1080&h=1080&fit=crop", # Poignée de main accord business
+        "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=1080&h=1080&fit=crop", # Entrepreneur professionnel confiant
+        "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=1080&h=1080&fit=crop", # Femme d'affaires sur ordinateur
+        "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1080&h=1080&fit=crop", # Équipe en coworking
+        "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1080&h=1080&fit=crop", # Gratte-ciels modernes en verre
+    ],
+    "marketing": [
+        "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1080&h=1080&fit=crop", # Graphiques de croissance & analytics
+        "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=1080&h=1080&fit=crop", # Marketing sur smartphone
+        "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1080&h=1080&fit=crop", # Réunion stratégique
+    ],
+    "ecommerce": [
+        "https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=1080&h=1080&fit=crop", # Paiement en ligne sécurisé
+        "https://images.unsplash.com/photo-1512428559087-560fa5ceab42?w=1080&h=1080&fit=crop", # Achats sur mobile
+    ]
+}
+
+def get_stock_photo(query_or_topic="Tech"):
+    """Trouve une vraie photographie professionnelle HD sur Unsplash adaptée au sujet."""
+    query_lower = str(query_or_topic).lower()
+    
+    if any(k in query_lower for k in ["format", "cours", "appren", "tuto", "etudiant", "ecole"]):
+        category = "formation"
+    elif any(k in query_lower for k in ["vente", "commerce", "boutique", "shopp", "produit", "client", "remise", "promo"]):
+        category = "ecommerce"
+    elif any(k in query_lower for k in ["market", "pub", "visibilite", "croissance", "audience", "reseau"]):
+        category = "marketing"
+    elif any(k in query_lower for k in ["business", "coach", "entrepr", "argent", "service", "agence", "travail"]):
+        category = "business"
+    else:
+        category = "ia_tech"
+        
+    photos = UNSPLASH_CATALOG.get(category, UNSPLASH_CATALOG["ia_tech"])
+    chosen_url = random.choice(photos)
+    
+    try:
+        res = requests.get(chosen_url, timeout=20)
+        if res.status_code == 200 and len(res.content) > 10000:
+            return res.content
+    except Exception as e:
+        print(f"Erreur get_stock_photo : {e}")
+        
+    return None
+
 def download_image(prompt):
     import random
     clean_prompt = prompt.strip().replace('"', '').replace("'", "")

@@ -141,7 +141,8 @@ def handle_telegram_message(text, token=None, chat_id=None):
                     audience="Grand public & Clients",
                     config=config
                 )
-                img = agent.download_image(ad_data["image_prompt"])
+                # Priorité absolue aux vraies photos professionnelles Unsplash (100% réalistes et belles)
+                img = agent.get_stock_photo(offer) or agent.download_image(ad_data["image_prompt"])
                 if img:
                     PENDING_DRAFT["text"] = ad_data["post_text"]
                     PENDING_DRAFT["image"] = img
