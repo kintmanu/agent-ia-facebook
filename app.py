@@ -11,8 +11,24 @@ import requests
 import threading
 import io
 
+import importlib
 import agent
 import bot
+
+# Rechargement forcé pour que Streamlit prenne immédiatement en compte les nouvelles fonctions sans mise en cache résiduelle
+try:
+    importlib.reload(agent)
+    importlib.reload(bot)
+except Exception:
+    pass
+
+
+def get_photo_safely(topic):
+    if hasattr(agent, "get_stock_photo"):
+        res = get_photo_safely(topic)
+        if res:
+            return res
+    return agent.download_image(f"modern clean professional photo {topic}")
 
 st.set_page_config(
     page_title="Mon Agence IA - Privée & Sécurisée",
@@ -405,7 +421,7 @@ with tab_schedule:
                             img_bytes = custom_prog_file.getvalue()
                         elif "📸" in visuel_p_type:
                             topic_ref = ad_p_prod if "Publicité" in genre_post else niche_actu
-                            img_bytes = agent.get_stock_photo(topic_ref) or agent.download_image(img_prompt)
+                            img_bytes = get_photo_safely(topic_ref) or agent.download_image(img_prompt)
                         else:
                             img_bytes = agent.download_image(img_prompt)
 
@@ -581,7 +597,7 @@ with tab_ads:
                     if custom_ad_file is not None:
                         img_bytes = custom_ad_file.getvalue()
                     elif "📸" in ad_visuel_type:
-                        img_bytes = agent.get_stock_photo(ad_prod) or agent.download_image(res_ad["image_prompt"])
+                        img_bytes = get_photo_safely(ad_prod) or agent.download_image(res_ad["image_prompt"])
                     else:
                         img_bytes = agent.download_image(res_ad["image_prompt"])
                     if img_bytes:
@@ -645,7 +661,7 @@ with tab_live:
             status_box.write("📝 Post rédigé avec succès !")
             
             status_box.write("🎨 3. Sélection de la photo professionnelle haute définition (Libre de droits)...")
-            image_data = agent.get_stock_photo(articles[0]['title']) or agent.download_image(content["image_prompt"])
+            image_data = get_photo_safely(articles[0]['title']) or agent.download_image(content["image_prompt"])
             if not image_data:
                 status_box.update(label="Erreur génération image", state="error")
                 st.stop()
