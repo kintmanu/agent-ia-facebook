@@ -51,7 +51,16 @@ def get_secret(key, default=""):
     except Exception:
         pass
     if not val:
-        val = os.environ.get(key, default)
+        val = os.environ.get(key, "")
+    if not val and os.path.exists("config.json"):
+        try:
+            with open("config.json", "r", encoding="utf-8") as f:
+                c = json.load(f)
+                val = c.get(key.lower(), "") or c.get(key, "")
+        except Exception:
+            pass
+    if not val:
+        val = default
     return str(val).strip().replace('"', '').replace("'", "")
 
 APP_PASSWORD = get_secret("APP_PASSWORD", "kint2026")
@@ -254,20 +263,45 @@ with st.sidebar:
         st.markdown("[👉 Créer mon compte gratuit Hugging Face (1 min)](https://huggingface.co/settings/tokens)")
 
         st.divider()
-        st.markdown("##### 📸 Option Gratuite Pexels (Photos HD)")
-        st.caption("20 000 photos gratuites/mois avec l'API officielle Pexels (100% stable, sans limite de mémoire).")
+        st.markdown("##### 📸 Option Gratuite Pexels (Photos HD Concrètes)")
+        st.caption("20 000 photos gratuites/mois avec l'API officielle Pexels (100% stable, zéro bug).")
         cur_pex = get_secret("PEXELS_API_KEY")
         in_pex = st.text_input("Clé API Pexels (Gratuite) :", type="password", value=cur_pex, placeholder="Clé Pexels...", key="sidebar_pex_key")
-        if st.button("💾 Enregistrer Clé Pexels", key="btn_save_pex", use_container_width=True):
-            if in_pex.strip():
-                clean_p = in_pex.strip()
-                agent.PEXELS_API_KEY = clean_p
-                config["pexels_api_key"] = clean_p
-                agent.save_config(config)
-                st.success("✅ Clé Pexels enregistrée !")
-                st.rerun()
-            else:
-                st.warning("Veuillez coller votre clé.")
+        col_pex_a, col_pex_b = st.columns(2)
+        with col_pex_a:
+            if st.button("💾 Enregistrer", key="btn_save_pex", use_container_width=True):
+                if in_pex.strip():
+                    clean_p = in_pex.strip().replace('"', '').replace("'", "")
+                    agent.PEXELS_API_KEY = clean_p
+                    config["pexels_api_key"] = clean_p
+                    agent.save_config(config)
+                    # Sauvegarder dans .env
+                    env_file = ".env"
+                    env_lines = []
+                    if os.path.exists(env_file):
+                        with open(env_file, "r", encoding="utf-8") as ef:
+                            env_lines = ef.readlines()
+                    updated = False
+                    for i, line in enumerate(env_lines):
+                        if line.startswith("PEXELS_API_KEY="):
+                            env_lines[i] = f"PEXELS_API_KEY={clean_p}\n"
+                            updated = True
+                    if not updated:
+                        env_lines.append(f"PEXELS_API_KEY={clean_p}\n")
+                    with open(env_file, "w", encoding="utf-8") as ef:
+                        ef.writelines(env_lines)
+                    st.success("✅ Clé Pexels enregistrée !")
+                    st.rerun()
+                else:
+                    st.warning("Veuillez coller votre clé.")
+        with col_pex_b:
+            if st.button("🧪 Tester", key="btn_test_pex", use_container_width=True):
+                tok_to_test = in_pex.strip() or cur_pex
+                ok_p, msg_p = agent.test_pexels_token(tok_to_test)
+                if ok_p:
+                    st.success(f"✅ {msg_p}")
+                else:
+                    st.error(f"❌ {msg_p}")
         st.markdown("[👉 Obtenir ma clé Pexels gratuite en 30s](https://www.pexels.com/api/)")
 
     st.divider()

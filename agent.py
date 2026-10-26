@@ -404,7 +404,8 @@ UNSPLASH_CATALOG = {
         "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1080&h=1080&fit=crop", # Accord commercial & partenariat réussi
     ],
     "ai_tech": [
-        "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&h=1080&fit=crop", # Ondes technologiques épurées & IA
+        "https://images.unsplash.com/photo-1531746790731-6c087fecd65a?w=1080&h=1080&fit=crop", # Visage robotique humanoïde IA futuriste
+        "https://images.unsplash.com/photo-1507146426996-ef05306b995a?w=1080&h=1080&fit=crop", # Robot blanc intelligent en laboratoire
         "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1080&h=1080&fit=crop", # Robot blanc moderne futuriste
         "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1080&h=1080&fit=crop", # Circuit haute précision & innovation
         "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1080&h=1080&fit=crop", # Code & automatisation digitale
@@ -509,6 +510,24 @@ def download_image(prompt):
 
 
 
+
+def test_pexels_token(key_to_test=None):
+    """Vérifie la validité d'une clé API Pexels."""
+    key = key_to_test or PEXELS_API_KEY or os.environ.get("PEXELS_API_KEY")
+    if not key:
+        return False, "Aucune clé Pexels renseignée."
+    try:
+        headers = {"Authorization": key.strip()}
+        res = requests.get("https://api.pexels.com/v1/curated?per_page=1", headers=headers, timeout=10)
+        if res.status_code == 200:
+            return True, "Clé Pexels 100% valide et fonctionnelle !"
+        elif res.status_code == 401:
+            return False, "Clé Pexels invalide. Vérifiez que vous avez bien copié votre clé depuis pexels.com/api."
+        else:
+            return False, f"Erreur Pexels (HTTP {res.status_code}) : {res.text[:100]}"
+    except Exception as e:
+        return False, f"Erreur de connexion : {e}"
+
 def get_pexels_photo(query, pexels_key=None, used_urls=None):
     """Recherche une vraie photo HD professionnelle sur Pexels via l'API gratuite."""
     key = pexels_key or PEXELS_API_KEY or os.environ.get("PEXELS_API_KEY")
@@ -575,7 +594,7 @@ def extract_visual_search_keywords(post_text, fallback="business technology"):
     elif any(k in text_lower for k in ["format", "cours", "appren", "tuto", "coaching", "atelier"]):
         return "workshop technology computer learning"
     elif any(k in text_lower for k in ["robot", "ia", "intelligence artificielle", "automat"]):
-        return "artificial intelligence high tech"
+        return "artificial intelligence humanoid robot"
     elif any(k in text_lower for k in ["ecommerce", "boutique", "produit", "livraison"]):
         return "online shopping delivery"
     elif any(k in text_lower for k in ["video", "youtube", "tiktok", "contenu"]):
