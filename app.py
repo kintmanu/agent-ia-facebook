@@ -30,10 +30,10 @@ def parse_json_safely(raw_text, default_key="post_text"):
     return {default_key: str(raw_text)}
 
 def get_photo_safely(topic):
-    if hasattr(agent, "get_stock_photo"):
-        res = getattr(agent, "get_stock_photo")(topic)
-        if res:
-            return res
+    if hasattr(agent, "get_best_image_for_post"):
+        img, src = agent.get_best_image_for_post(topic, image_prompt=topic)
+        if img:
+            return img
     return agent.download_image(f"modern clean professional photo {topic}")
 
 st.set_page_config(
@@ -420,9 +420,9 @@ with tab_chat:
                     btn_col1, btn_col2 = st.columns(2)
                     with btn_col1:
                         if st.button(f"🎨 Générer le visuel pour ce texte", key=f"btn_gen_{idx}", use_container_width=True):
-                            with st.spinner("Génération de l'image 1080x1080 FLUX sans filigrane..."):
+                            with st.spinner("Génération de l'image sur-mesure (Agnes AI / HD)..."):
                                 img_prompt = agent.create_image_prompt_from_text(msg["content"])
-                                img_bytes = agent.download_image(img_prompt)
+                                img_bytes, src = agent.get_best_image_for_post(msg["content"], image_prompt=img_prompt, config=config)
                                 if img_bytes:
                                     st.session_state.draft_image = img_bytes
                                     st.session_state.draft_text = msg["content"]
@@ -577,11 +577,8 @@ with tab_schedule:
 
                         if custom_prog_file is not None:
                             img_bytes = custom_prog_file.getvalue()
-                        elif "📸" in visuel_p_type:
-                            topic_ref = ad_p_prod if "Publicité" in genre_post else niche_actu
-                            img_bytes = get_photo_safely(topic_ref) or agent.download_image(img_prompt)
                         else:
-                            img_bytes = agent.download_image(img_prompt)
+                            img_bytes, src = agent.get_best_image_for_post(post_text, image_prompt=img_prompt, config=config)
 
                         if not img_bytes:
                             st.error("Erreur de chargement de l'image.")
@@ -896,10 +893,8 @@ with tab_ads:
                     res_ad = agent.generate_ad_post(ad_prod, ad_det, ad_cta_field, ad_aud_field, config)
                     if custom_ad_file is not None:
                         img_bytes = custom_ad_file.getvalue()
-                    elif "📸" in ad_visuel_type:
-                        img_bytes = get_photo_safely(ad_prod) or agent.download_image(res_ad["image_prompt"])
                     else:
-                        img_bytes = agent.download_image(res_ad["image_prompt"])
+                        img_bytes, src = agent.get_best_image_for_post(res_ad["post_text"], image_prompt=res_ad.get("image_prompt"), config=config)
                     if img_bytes:
                         st.session_state.ad_text = res_ad["post_text"]
                         st.session_state.ad_image = img_bytes
@@ -960,8 +955,8 @@ with tab_live:
             content = agent.generate_post(articles, config)
             status_box.write("📝 Post rédigé avec succès !")
             
-            status_box.write("🎨 3. Sélection de la photo professionnelle haute définition (Libre de droits)...")
-            image_data = get_photo_safely(articles[0]['title']) or agent.download_image(content["image_prompt"])
+            status_box.write("🎨 3. Génération du visuel sur-mesure (Agnes AI / HD)...")
+            image_data, src = agent.get_best_image_for_post(content["post_text"], image_prompt=content.get("image_prompt"), config=config)
             if not image_data:
                 status_box.update(label="Erreur génération image", state="error")
                 st.stop()

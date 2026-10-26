@@ -471,6 +471,12 @@ def get_stock_photo(text_or_topic="Tech", used_urls=None):
 
     return None
 def download_image(prompt):
+    # Priorité absolue à Agnes AI si la clé est configurée
+    if AGNES_API_KEY or os.environ.get("AGNES_API_KEY"):
+        img_bytes, msg = generate_image_agnes(prompt)
+        if img_bytes:
+            return img_bytes
+
     import random
     clean_prompt = prompt.strip().replace('"', '').replace("'", "")
     full_prompt = f"{clean_prompt}, clean professional photography, crisp focus, studio lighting, award winning 8k"
