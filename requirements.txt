@@ -3,3 +3,4 @@ requests
 feedparser
 pillow
 streamlit
+huggingface_hub

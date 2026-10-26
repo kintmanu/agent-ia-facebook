@@ -55,6 +55,8 @@ FB_PAGE_ID = get_secret("FB_PAGE_ID", "61578925910517")
 FB_TOKEN = get_secret("FB_PAGE_ACCESS_TOKEN")
 TG_TOKEN = get_secret("TELEGRAM_BOT_TOKEN")
 TG_CHAT_ID = get_secret("TELEGRAM_CHAT_ID")
+HF_TOKEN = get_secret("HF_TOKEN")
+agent.HF_TOKEN = HF_TOKEN
 
 agent.GEMINI_API_KEY = GEMINI_KEY
 agent.FB_PAGE_ID = FB_PAGE_ID
@@ -190,6 +192,57 @@ with st.sidebar:
                     st.error(f"❌ Erreur Facebook : {msg_tok}")
             else:
                 st.warning("⚠️ Veuillez coller un jeton.")
+
+        st.divider()
+        st.markdown("##### 🎨 Modèle d'Images IA Gratuit (FLUX & Kolors)")
+        st.caption("Générez des images sur-mesure ultra-réalistes avec le modèle **FLUX.1** ou le modèle chinois **Kolors** via un jeton gratuit Hugging Face.")
+        current_hf = get_secret("HF_TOKEN")
+        new_hf_tok = st.text_input("Clé Hugging Face (Gratuite) :", type="password", value=current_hf, placeholder="hf_xxxxxxxxxxxxxxxx", key="sidebar_hf_tok")
+        hf_model_sel = st.selectbox(
+            "Modèle IA :",
+            [
+                "black-forest-labs/FLUX.1-schnell (Mondial #1)",
+                "Kwai-Kolors/Kolors (Modèle Chinois Kuaishou)",
+                "stabilityai/stable-diffusion-xl-base-1.0 (SDXL)"
+            ],
+            key="sidebar_hf_model"
+        )
+        col_hfa, col_hfb = st.columns(2)
+        with col_hfa:
+            if st.button("💾 Enregistrer Clé", key="btn_save_hf", use_container_width=True):
+                if new_hf_tok.strip():
+                    clean_hf = new_hf_tok.strip().replace('"', '').replace("'", "")
+                    agent.HF_TOKEN = clean_hf
+                    config["hf_token"] = clean_hf
+                    config["hf_model"] = hf_model_sel.split(" ")[0]
+                    agent.save_config(config)
+                    env_file = ".env"
+                    env_lines = []
+                    if os.path.exists(env_file):
+                        with open(env_file, "r", encoding="utf-8") as ef:
+                            env_lines = ef.readlines()
+                    updated = False
+                    for i, line in enumerate(env_lines):
+                        if line.startswith("HF_TOKEN="):
+                            env_lines[i] = f"HF_TOKEN={clean_hf}\n"
+                            updated = True
+                    if not updated:
+                        env_lines.append(f"HF_TOKEN={clean_hf}\n")
+                    with open(env_file, "w", encoding="utf-8") as ef:
+                        ef.writelines(env_lines)
+                    st.success("✅ Clé enregistrée !")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ Veuillez coller votre clé.")
+        with col_hfb:
+            if st.button("🧪 Tester Clé IA", key="btn_test_hf", use_container_width=True):
+                tok_to_test = new_hf_tok.strip() or current_hf
+                ok_h, msg_h = agent.test_huggingface_token(tok_to_test)
+                if ok_h:
+                    st.success(f"✅ {msg_h}")
+                else:
+                    st.error(f"❌ {msg_h}")
+        st.markdown("[👉 Créer mon compte gratuit Hugging Face (1 min)](https://huggingface.co/settings/tokens)")
 
     st.divider()
     if st.button("Déconnexion 🔒", use_container_width=True):

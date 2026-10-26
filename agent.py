@@ -36,6 +36,7 @@ FB_PAGE_ID = os.environ.get("FB_PAGE_ID", "61578925910517")
 FB_PAGE_ACCESS_TOKEN = os.environ.get("FB_PAGE_ACCESS_TOKEN")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+HF_TOKEN = os.environ.get("HF_TOKEN")
 
 CONFIG_FILE = "config.json"
 HISTORY_FILE = "history.txt"
@@ -483,6 +484,56 @@ def download_image(prompt):
 
     return None
 
+
+def test_huggingface_token(token_to_test=None):
+    """Vérifie la validité d'un jeton gratuit Hugging Face."""
+    tok = token_to_test or HF_TOKEN or os.environ.get("HF_TOKEN")
+    if not tok:
+        return False, "Aucun jeton Hugging Face renseigné."
+    try:
+        headers = {"Authorization": f"Bearer {tok.strip()}"}
+        res = requests.get("https://huggingface.co/api/whoami-v2", headers=headers, timeout=10)
+        if res.status_code == 200:
+            name = res.json().get("name", "Utilisateur")
+            return True, f"Connexion réussie ! Compte Hugging Face : {name}"
+        else:
+            return False, "Jeton Hugging Face invalide. Vérifiez que vous avez bien copié votre token 'Read'."
+    except Exception as e:
+        return False, f"Erreur de connexion : {e}"
+
+def generate_image_with_huggingface(prompt, hf_token=None, model="black-forest-labs/FLUX.1-schnell"):
+    """
+    Génère une vraie image IA sur-mesure via l'API gratuite Hugging Face (FLUX.1-schnell ou Kolors).
+    """
+    tok = hf_token or HF_TOKEN or os.environ.get("HF_TOKEN")
+    if not tok:
+        return None, "Aucun jeton Hugging Face renseigné."
+
+    clean_prompt = prompt.strip().replace('"', '').replace("'", "")
+    enhanced_prompt = f"{clean_prompt}, professional commercial photography, studio lighting, crisp focus, 8k photo, highly detailed"
+
+    url = f"https://router.huggingface.co/hf-inference/models/{model}"
+    headers = {
+        "Authorization": f"Bearer {tok.strip()}",
+        "Content-Type": "application/json"
+    }
+    payload = {"inputs": enhanced_prompt}
+
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=50)
+        if res.status_code == 200 and len(res.content) > 10000:
+            return res.content, "Image générée avec succès via Hugging Face !"
+        elif res.status_code == 503:
+            return None, "Le modèle se réveille sur Hugging Face (réessayez dans 15 secondes)."
+        else:
+            try:
+                err_msg = res.json().get("error", res.text)
+            except Exception:
+                err_msg = res.text[:200]
+            return None, f"Erreur Hugging Face ({res.status_code}) : {err_msg}"
+    except Exception as e:
+        return None, f"Erreur réseau Hugging Face : {e}"
+
 # 8. Publication Facebook
 def get_page_access_token(token_to_use=None, target_page_id=None):
     token = token_to_use or FB_PAGE_ACCESS_TOKEN
@@ -914,7 +965,20 @@ Contactez Emmanuel Kint pour plus d'informations.
 #IA #Innovation #EmmanuelKint"""
 
             # Sélection photo Unsplash HD (ultra rapide)
-            img_bytes = get_stock_photo(post_text, used_urls=used_images_set) or download_image(f"modern clean photo {topic_img}")
+            # Priorité 1 : Génération IA sur-mesure si un jeton gratuit Hugging Face est actif
+            img_bytes = None
+            img_prompt_ad = topic_img
+            if is_ad and isinstance(ad_data, dict) and ad_data.get("image_prompt"):
+                img_prompt_ad = ad_data.get("image_prompt")
+            elif not is_ad and isinstance(news_data, dict) and news_data.get("image_prompt"):
+                img_prompt_ad = news_data.get("image_prompt")
+
+            if HF_TOKEN or os.environ.get("HF_TOKEN"):
+                img_bytes, hf_status = generate_image_with_huggingface(img_prompt_ad, model=config.get("hf_model", "black-forest-labs/FLUX.1-schnell"))
+
+            # Priorité 2 : Vraie photo Unsplash contextuelle sans doublon
+            if not img_bytes:
+                img_bytes = get_stock_photo(post_text, used_urls=used_images_set) or download_image(f"modern clean photo {topic_img}")
             if not img_bytes:
                 item_err = {
                     "date": s_dt.strftime("%d/%m/%Y à %H:%M"),
