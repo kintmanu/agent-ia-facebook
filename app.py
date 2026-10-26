@@ -25,7 +25,7 @@ except Exception:
 
 def get_photo_safely(topic):
     if hasattr(agent, "get_stock_photo"):
-        res = get_photo_safely(topic)
+        res = getattr(agent, "get_stock_photo")(topic)
         if res:
             return res
     return agent.download_image(f"modern clean professional photo {topic}")
