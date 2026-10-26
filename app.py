@@ -540,7 +540,72 @@ with tab_schedule:
         off_sujet = st.text_input("Offre ou Service promu dans les pubs :", value=config.get("campaign_ad_topic", "Solutions et formations en IA"))
 
         st.divider()
-        if st.button("💾 Enregistrer la Campagne", type="primary", use_container_width=True):
+        st.markdown("#### 4. Lancement & Programmation sur Facebook")
+        st.info("💡 **Comment fonctionne la programmation ?** L'agent génère chaque post avec une photo HD Unsplash et l'enregistre directement dans votre calendrier **Meta/Facebook**. Facebook publiera chaque post automatiquement à l'heure exacte choisie, même si votre ordinateur ou votre téléphone est éteint !")
+
+        col_prog_opt1, col_prog_opt2 = st.columns([2, 1])
+        with col_prog_opt1:
+            quantite_prog = st.selectbox(
+                "Nombre de publications à pré-programmer sur Facebook :",
+                [
+                    f"🚀 Toutes les publications à venir de la campagne ({tot_posts} posts)",
+                    "⚡ Les 3 prochains créneaux (Aujourd'hui & Demain)",
+                    "📦 Les 6 prochains créneaux (2 prochains jours)"
+                ]
+            )
+        with col_prog_opt2:
+            st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+            pub_now_clicked = st.button("⚡ Publier un post tout de suite", help="Publie immédiatement un post pour le créneau d'aujourd'hui sans attendre", use_container_width=True)
+
+        if pub_now_clicked:
+            with st.spinner("🤖 Rédaction et publication immédiate sur Facebook..."):
+                try:
+                    if "Publicités" in chosen_strat:
+                        is_ad_now = True
+                    elif "Mixte" in chosen_strat:
+                        is_ad_now = (datetime.datetime.now().hour >= 12)
+                    else:
+                        is_ad_now = False
+
+                    if is_ad_now:
+                        ad_data = agent.generate_ad_post(
+                            product_name=off_sujet,
+                            offer_details=off_sujet,
+                            cta="Écrivez-moi en message privé pour en profiter",
+                            audience="Entrepreneurs et professionnels",
+                            config=config
+                        )
+                        p_text = ad_data.get("post_text", "")
+                        p_img = agent.get_stock_photo(off_sujet) or agent.download_image(f"photo {off_sujet}")
+                    else:
+                        arts = agent.fetch_ai_news(config, force=True) or [{"title": f"Dernières tendances {config.get('niche', 'IA')}", "link": "https://news.google.com"}]
+                        n_data = agent.generate_post(arts, config)
+                        p_text = n_data.get("post_text", "")
+                        p_img = agent.get_stock_photo(config.get("niche", "Tech")) or agent.download_image("photo technology")
+
+                    if p_img:
+                        ok_pub, msg_pub = agent.publish_to_facebook(p_text, p_img)
+                        if ok_pub:
+                            st.success("🎉 **PUBLICATION IMMÉDIATE RÉUSSIE SUR FACEBOOK !**")
+                            st.markdown("[👉 Ouvrir ma Page Facebook](https://www.facebook.com/profile.php?id=61578925910517)")
+                        else:
+                            st.error(f"❌ Erreur Facebook : {msg_pub}")
+                    else:
+                        st.error("Impossible de générer le visuel.")
+                except Exception as e_pub:
+                    st.error(f"Erreur : {e_pub}")
+
+        btn_col_a, btn_col_b = st.columns([2, 1])
+        with btn_col_a:
+            launch_camp_btn = st.button(
+                "🚀 Fabriquer et Programmer automatiquement les publications sur Facebook",
+                type="primary",
+                use_container_width=True
+            )
+        with btn_col_b:
+            save_only_btn = st.button("💾 Enregistrer réglages seuls", use_container_width=True)
+
+        if save_only_btn or launch_camp_btn:
             config["schedule_slots"] = {
                 "morning": {"enabled": m_en, "time": m_t.strftime("%H:%M"), "label": "Matin"},
                 "midday": {"enabled": d_en, "time": d_t.strftime("%H:%M"), "label": "Midi"},
@@ -554,9 +619,44 @@ with tab_schedule:
             config["active_campaign"] = True
             agent.save_config(config)
 
-            st.success(f"✅ **Campagne enregistrée pour {total_j} jour(s) ({tot_posts} publications) !**")
-            msg_camp = f"Campagne enregistrée pour {total_j} jours ({tot_posts} posts)."
-            bot.send_tg_message(msg_camp)
+        if save_only_btn:
+            st.success(f"✅ **Réglages de la campagne enregistrés avec succès !**")
+            bot.send_tg_message(f"Réglages de campagne enregistrés : {total_j} jours, {tot_posts} posts prévus.")
+
+        if launch_camp_btn:
+            limit_p = None
+            if "3 prochains" in quantite_prog:
+                limit_p = 3
+            elif "6 prochains" in quantite_prog:
+                limit_p = 6
+
+            prog_bar = st.progress(0.0)
+            status_box = st.empty()
+
+            def on_progress(cur, total, msg):
+                prog_bar.progress(cur / total)
+                status_box.info(f"⏳ **Progression : {cur}/{total}** - {msg}")
+
+            with st.spinner("🤖 Préparation des publications et envoi à Facebook..."):
+                ok_sched, res_sched = agent.schedule_campaign_on_facebook(config, max_posts=limit_p, progress_callback=on_progress)
+                prog_bar.progress(1.0)
+
+                if ok_sched and isinstance(res_sched, list):
+                    nb_ok = sum(1 for r in res_sched if "✅" in r.get("status", ""))
+                    status_box.empty()
+                    st.success(f"🎉 **{nb_ok} publication(s) ont été officiellement programmées sur Facebook !**")
+                    st.info("📅 Toutes ces publications sont enregistrées dans votre calendrier **Meta Business Suite**. Facebook les publiera automatiquement aux dates et heures prévues !")
+
+                    # Tableau récapitulatif
+                    import pandas as pd
+                    df_sched = pd.DataFrame(res_sched)
+                    df_sched.columns = ["Date & Heure", "Créneau", "Type de Contenu", "Statut sur Facebook"]
+                    st.dataframe(df_sched, use_container_width=True)
+
+                    # Notification Telegram
+                    bot.send_tg_message(f"🎉 Campagne Facebook : {nb_ok} publications programmées sur Meta Business Suite !")
+                else:
+                    st.warning(f"⚠️ {res_sched}")
 
 
 # ==========================================

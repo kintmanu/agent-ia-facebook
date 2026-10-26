@@ -1,4 +1,5 @@
 import random
+import time
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -784,3 +785,139 @@ def test_gemini_key(key_to_test=None):
                 return False, f"Erreur Google (HTTP {res.status_code}) : {res.text}"
     except Exception as e:
         return False, f"Erreur de connexion : {e}"
+
+
+def schedule_campaign_on_facebook(config, max_posts=None, progress_callback=None):
+    """
+    Génère et programme nativement sur les serveurs Meta/Facebook
+    toutes les publications futures de la campagne.
+    """
+    slots = config.get("schedule_slots", {})
+    active_slots = [(k, v) for k, v in slots.items() if v.get("enabled")]
+    if not active_slots:
+        return False, "Aucun créneau actif (Matin, Midi, Soir) n'est activé dans vos réglages."
+
+    def parse_slot_time(t_str):
+        clean = t_str.replace("h", ":").strip()
+        parts = clean.split(":")
+        return datetime.time(int(parts[0]), int(parts[1]))
+
+    slot_times = []
+    for k, v in active_slots:
+        try:
+            t_obj = parse_slot_time(v.get("time", "12:00"))
+            slot_times.append((k, v.get("label", k), t_obj))
+        except Exception:
+            pass
+
+    slot_times.sort(key=lambda x: x[2])
+
+    duration_days = int(config.get("campaign_duration_days", 7))
+    content_type = config.get("campaign_content_type", "Mixte")
+    ad_topic = config.get("campaign_ad_topic", "Formations en IA et solutions d'automatisation")
+    niche = config.get("niche", "Intelligence Artificielle")
+
+    now = datetime.datetime.now()
+    future_slots = []
+    for d in range(duration_days):
+        day_date = datetime.date.today() + datetime.timedelta(days=d)
+        for slot_key, slot_label, slot_time in slot_times:
+            slot_dt = datetime.datetime.combine(day_date, slot_time)
+            # Facebook Graph API impose d'être au minimum 10 min dans le futur et au maximum 75 jours
+            if slot_dt > (now + datetime.timedelta(minutes=10)):
+                future_slots.append((slot_key, slot_label, slot_dt))
+
+    if not future_slots:
+        return False, "Tous les créneaux d'aujourd'hui sont déjà passés. Facebook exige une programmation au moins 10 minutes dans le futur. Le prochain créneau sera demain ou plus tard."
+
+    if max_posts and int(max_posts) > 0:
+        future_slots = future_slots[:int(max_posts)]
+
+    total_to_schedule = len(future_slots)
+    results = []
+
+    for idx, (s_key, s_label, s_dt) in enumerate(future_slots):
+        is_ad = False
+        if "Publicités" in content_type and "Actualités" not in content_type:
+            is_ad = True
+        elif "Mixte" in content_type:
+            is_ad = (s_key in ["midday", "evening"])
+        else:
+            is_ad = False
+
+        slot_desc = f"{s_label} du {s_dt.strftime('%d/%m à %H:%M')}"
+        if progress_callback:
+            progress_callback(idx + 1, total_to_schedule, f"Post {idx+1}/{total_to_schedule} ({slot_desc}) : Rédaction & photo...")
+
+        try:
+            post_text = ""
+            topic_img = niche
+            if is_ad:
+                ad_data = generate_ad_post(
+                    product_name=ad_topic,
+                    offer_details=f"{ad_topic} (Offre {idx+1})",
+                    cta="Écrivez-moi en message privé pour en profiter",
+                    audience="Entrepreneurs, professionnels et passionnés de tech",
+                    config=config
+                )
+                if isinstance(ad_data, dict):
+                    post_text = ad_data.get("post_text", "")
+                else:
+                    post_text = str(ad_data)
+                topic_img = ad_topic
+            else:
+                articles = fetch_ai_news(config, force=True)
+                if articles:
+                    art = articles[idx % len(articles)]
+                    news_data = generate_post([art], config)
+                else:
+                    news_data = generate_post([{"title": f"Dernières tendances en {niche}", "link": "https://news.google.com"}], config)
+                if isinstance(news_data, dict):
+                    post_text = news_data.get("post_text", "")
+                else:
+                    post_text = str(news_data)
+                topic_img = niche
+
+            if not post_text:
+                post_text = f"🚀 Retrouvez toutes les nouveautés et opportunités en {niche} !\n\nContactez Emmanuel Kint pour échanger.\n\n#IA #Innovation #EmmanuelKint"
+
+            # Sélection photo Unsplash HD
+            img_bytes = get_stock_photo(topic_img) or download_image(f"modern clean professional photo {topic_img}")
+            if not img_bytes:
+                results.append({
+                    "date": s_dt.strftime("%d/%m/%Y à %H:%M"),
+                    "slot": s_label,
+                    "type": "Publicité" if is_ad else "Actualité",
+                    "status": "❌ Erreur visuel"
+                })
+                continue
+
+            ts = int(s_dt.timestamp())
+            ok, msg = publish_to_facebook(post_text, img_bytes, scheduled_time=ts)
+            dt_formatted = s_dt.strftime("%d/%m/%Y à %H:%M")
+            if ok:
+                results.append({
+                    "date": dt_formatted,
+                    "slot": s_label,
+                    "type": "Publicité" if is_ad else "Actualité",
+                    "status": "✅ Programmé sur Facebook"
+                })
+            else:
+                results.append({
+                    "date": dt_formatted,
+                    "slot": s_label,
+                    "type": "Publicité" if is_ad else "Actualité",
+                    "status": f"❌ Erreur: {msg}"
+                })
+            
+            time.sleep(2)
+        except Exception as e:
+            results.append({
+                "date": s_dt.strftime("%d/%m/%Y à %H:%M"),
+                "slot": s_label,
+                "type": "Publicité" if is_ad else "Actualité",
+                "status": f"❌ Erreur : {e}"
+            })
+
+    return True, results
+
